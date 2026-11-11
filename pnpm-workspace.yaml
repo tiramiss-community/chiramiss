@@ -1,0 +1,9 @@
+packages:
+  - packages/*
+saveExact: true
+allowBuilds:
+  esbuild: true
+# 公開から7日経っていないバージョンは解決しない
+minimumReleaseAge: 10080
+# 7日未満のバージョンしか条件を満たせない場合はエラーにせず通す
+minimumReleaseAgeStrict: false

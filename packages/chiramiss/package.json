@@ -1,0 +1,43 @@
+{
+	"name": "@tiramiss-community/chiramiss",
+	"version": "0.0.0",
+	"description": "summaly-compatible URL summary library",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/tiramiss-community/chiramiss.git",
+		"directory": "packages/chiramiss"
+	},
+	"bugs": "https://github.com/tiramiss-community/chiramiss/issues",
+	"type": "module",
+	"main": "./built/index.js",
+	"types": "./built/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./built/index.d.ts",
+			"import": "./built/index.js"
+		}
+	},
+	"files": [
+		"built",
+		"LICENSE"
+	],
+	"engines": {
+		"node": ">=26.4.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"scripts": {
+		"build": "tsdown",
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit -p tsconfig.json"
+	},
+	"devDependencies": {
+		"@types/node": "26.6.2",
+		"tsdown": "0.23.0",
+		"typescript": "7.0.2",
+		"vitest": "5.0.1"
+	}
+}

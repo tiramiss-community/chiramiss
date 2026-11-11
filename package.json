@@ -1,0 +1,30 @@
+{
+	"name": "chiramiss-monorepo",
+	"private": true,
+	"type": "module",
+	"description": "summaly-compatible URL summary library and standalone server",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/tiramiss-community/chiramiss.git"
+	},
+	"packageManager": "pnpm@12.6.0",
+	"engines": {
+		"node": ">=26.4.0"
+	},
+	"scripts": {
+		"build": "pnpm -r build",
+		"test": "pnpm -r test",
+		"lint": "oxlint",
+		"typecheck": "pnpm -r typecheck",
+		"release": "pnpm build && changeset publish"
+	},
+	"devDependencies": {
+		"@changesets/cli": "3.0.3",
+		"@misskey-dev/oxlint-fmt-config": "0.1.1",
+		"@stylistic/eslint-plugin": "5.10.0",
+		"oxlint": "1.85.0",
+		"oxlint-tsgolint": "7.0.2002",
+		"typescript": "7.0.2"
+	}
+}

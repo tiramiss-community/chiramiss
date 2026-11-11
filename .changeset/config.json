@@ -1,0 +1,9 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [["@tiramiss-community/chiramiss", "@tiramiss-community/chiramiss-server"]],
+  "access": "public",
+  "baseBranch": "main",
+  "privatePackages": { "version": true, "tag": true }
+}
