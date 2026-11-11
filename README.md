@@ -25,6 +25,7 @@ Requires Node.js `^22.22.2 || ^24.17.0 || >=26.4.0`. ESM only.
 
 - [About ChiramissBot](#about-chiramissbot)
 - [Compatibility with summaly](#compatibility-with-summaly)
+- [Names kept for summaly compatibility](#names-kept-for-summaly-compatibility)
 - [Using it in Misskey](#using-it-in-misskey)
 - [Library usage](#library-usage)
 - [Standalone server](#standalone-server)
@@ -63,29 +64,61 @@ For problems with requests from one particular server, contacting that server's 
 chiramiss keeps the public interface of summaly v5.5.2. Results can differ from upstream in details (how a title or
 thumbnail is picked); the compatibility target is the interface, not byte-identical output.
 
+chiramiss has its own names (`summarize`, `SummaryResult`, `CHIRAMISS_*`, ...). summaly's names are kept as aliases of
+them, so code and configuration written for summaly keep working (see
+[Names kept for summaly compatibility](#names-kept-for-summaly-compatibility)).
+
 ### Library (`@tiramiss-community/chiramiss`)
 
-- Exports: `summaly(url, options?)`, `version`, `summalyDefaultOptions`, the types `SummalyResult`, `SummalyOptions`,
-  `SummalyPlugin` (and `Summary`, `Player`, `GeneralScrapingOptions`), and the Fastify plugin as the default export.
-- `SummalyOptions` keeps upstream's keys and meanings: `lang`, `followRedirects`, `plugins`, `agent`, `userAgent`,
+- Exports: `summarize(url, options?)`, `version`, `defaultSummarizeOptions`, the types `SummaryResult`,
+  `SummarizeOptions`, `SummaryPlugin` (and `Summary`, `Player`, `GeneralScrapingOptions`), and the Fastify plugin as
+  the default export. summaly's `summaly`, `summalyDefaultOptions`, `SummalyResult`, `SummalyOptions` and
+  `SummalyPlugin` are exported too, as aliases of these.
+- `SummarizeOptions` keeps upstream's keys and meanings: `lang`, `followRedirects`, `plugins`, `agent`, `userAgent`,
   `responseTimeout`, `operationTimeout`, `contentLengthLimit`, `contentLengthRequired`.
   `agent` takes `{ http?: http.Agent, https?: https.Agent }` and the given agents are used for the actual requests.
-- `SummalyResult` has the same shape: `title`, `icon`, `description`, `thumbnail`, `thumbnailStyle`, `sitename`,
-  `player` (`url`, `width`, `height`, `allow`), `sensitive`, `activityPub`, `fediverseCreator`, `url`.
-- Custom plugins (`SummalyPlugin`: `test(url)`, `summarize(url, opts)`) work as before. Built-in plugins cover
+- `SummaryResult` has the same shape as upstream's `SummalyResult`: `title`, `icon`, `description`, `thumbnail`,
+  `thumbnailStyle`, `sitename`, `player` (`url`, `width`, `height`, `allow`), `sensitive`, `activityPub`,
+  `fediverseCreator`, `url`.
+- Custom plugins (`SummaryPlugin`: `test(url)`, `summarize(url, opts)`) work as before. Built-in plugins cover
   Amazon, Bluesky, Wikipedia and branch.io deep links, as upstream.
 - The package is ESM, so `await import('@misskey-dev/summaly')` keeps working.
 - `version` is chiramiss's own version (it does not continue upstream's numbering).
-- The published `.d.ts` does not depend on `fastify`, so frontend packages that import only `SummalyResult` type-check
-  without it.
+- The published `.d.ts` does not depend on `fastify`, so frontend packages that import only `SummaryResult` (or
+  `SummalyResult`) type-check without it.
 
 ### Server
 
 - `GET /?url=...&lang=...` returns the summary as JSON; a missing `url` gives 400, a failed summary gives 500, both
   with `{ "error": ... }`, as upstream.
-- Upstream's environment variables (`SUMMALY_HOST`, `SUMMALY_PORT`, `SUMMALY_LANG`, `SUMMALY_USER_AGENT`,
-  `SUMMALY_FOLLOW_REDIRECTS`, `SUMMALY_RESPONSE_TIMEOUT`, `SUMMALY_OPERATION_TIMEOUT`, `SUMMALY_CONTENT_LENGTH_LIMIT`,
-  `SUMMALY_CONTENT_LENGTH_REQUIRED`) keep their names and meanings. Invalid values stop the server at startup.
+- The settings upstream reads from `SUMMALY_HOST`, `SUMMALY_PORT`, `SUMMALY_LANG`, `SUMMALY_USER_AGENT`,
+  `SUMMALY_FOLLOW_REDIRECTS`, `SUMMALY_RESPONSE_TIMEOUT`, `SUMMALY_OPERATION_TIMEOUT`, `SUMMALY_CONTENT_LENGTH_LIMIT`
+  and `SUMMALY_CONTENT_LENGTH_REQUIRED` keep their meanings. chiramiss reads them as `CHIRAMISS_*` first and still
+  accepts the `SUMMALY_*` names. Invalid values stop the server at startup.
+
+## Names kept for summaly compatibility
+
+chiramiss's own names are the primary ones. summaly's names are still accepted as aliases: the library exports them
+as the very same values and types (`summaly === summarize`), and the server and library read the `SUMMALY_*`
+environment variables too. They are not deprecated.
+
+| summaly name (alias)                          | chiramiss name                                  |
+|:----------------------------------------------|:------------------------------------------------|
+| `summaly(url, options)`                       | `summarize(url, options)`                       |
+| `createSummaly(base)`                         | `createSummarizer(base)`                        |
+| `summalyDefaultOptions`                       | `defaultSummarizeOptions`                       |
+| `SummalyResult`                               | `SummaryResult`                                 |
+| `SummalyOptions`                              | `SummarizeOptions`                              |
+| `SummalyPlugin`                               | `SummaryPlugin`                                 |
+| `SUMMALY_*` (every server variable)           | `CHIRAMISS_*` (same suffix, e.g. `SUMMALY_HOST` → `CHIRAMISS_HOST`) |
+| `SUMMALY_ALLOW_PRIVATE_IP` (read by the library) | `CHIRAMISS_ALLOW_PRIVATE_IP`                 |
+
+For each environment variable, `CHIRAMISS_<NAME>` is used when it is set; otherwise `SUMMALY_<NAME>` is used. An empty
+value counts as unset, so `CHIRAMISS_PORT=` falls back to `SUMMALY_PORT`. When a value is invalid, the error names
+the variable that was actually read.
+
+The default export (the Fastify plugin), the server's HTTP API, `version` and the default User-Agent
+(`ChiramissBot/...`) are the same whichever names you use.
 
 ### Differences from upstream
 
@@ -97,7 +130,7 @@ Behavior that intentionally differs from summaly v5.5.2:
   blocking private addresses becomes that agent's job (Misskey's agents do it). chiramiss applies this per scheme:
   passing only `agent.http` keeps chiramiss's own blocking for `https:` requests. An entry without an agent
   (`{ http: undefined }`) does not turn the blocking off, unlike upstream. To turn it off for tests, set
-  `SUMMALY_ALLOW_PRIVATE_IP=true`.
+  `CHIRAMISS_ALLOW_PRIVATE_IP=true` (or `SUMMALY_ALLOW_PRIVATE_IP=true`).
 - **`contentLengthLimit`** caps both the bytes received on the wire (compressed) and the decompressed body.
 - **The `content-length` check** compares the raw header with `contentLengthLimit` even for compressed responses.
   Upstream (got) effectively skipped it for compressed responses, so a compressed page whose `content-length`
@@ -121,8 +154,11 @@ Behavior that intentionally differs from summaly v5.5.2:
 
 ## Using it in Misskey
 
-Misskey imports the package as `@misskey-dev/summaly`, so replace it with an npm alias. Do this in every package that
-depends on it (`packages/backend`, and `packages/frontend` / `packages/frontend-embed`, which use its types):
+There are two ways to use the library in a Misskey-family server, plus the standalone server.
+
+**Swap it in with an npm alias (no code changes).** Misskey imports the package as `@misskey-dev/summaly`, so replace
+it with an npm alias. Do this in every package that depends on it (`packages/backend`, and `packages/frontend` /
+`packages/frontend-embed`, which use its types):
 
 ```json
 {
@@ -132,7 +168,27 @@ depends on it (`packages/backend`, and `packages/frontend` / `packages/frontend-
 }
 ```
 
-Then run `pnpm install`. No code changes are needed.
+Then run `pnpm install`. No code changes are needed: the code keeps calling `summaly` and using `SummalyResult`,
+which are aliases of chiramiss's names.
+
+**Import `@tiramiss-community/chiramiss` directly.** Add the package under its own name and use chiramiss's names:
+
+```json
+{
+  "dependencies": {
+    "@tiramiss-community/chiramiss": "^0.1.0"
+  }
+}
+```
+
+```ts
+// packages/backend (e.g. UrlPreviewService)
+const { summarize } = await import('@tiramiss-community/chiramiss');
+const summary = await summarize(url, { lang, agent: { http: httpAgent, https: httpsAgent } });
+
+// packages/frontend, packages/frontend-embed
+import type { SummaryResult } from '@tiramiss-community/chiramiss';
+```
 
 Alternatively, run the [standalone server](#standalone-server) and set its URL (for example
 `http://chiramiss:3000/`) as "Summary proxy URL" (`urlPreviewSummaryProxyUrl`) in the control panel.
@@ -140,17 +196,17 @@ Alternatively, run the [standalone server](#standalone-server) and set its URL (
 ## Library usage
 
 ```ts
-import { summaly } from '@tiramiss-community/chiramiss';
+import { summarize } from '@tiramiss-community/chiramiss';
 
-const summary = await summaly('https://example.com/', { lang: 'ja-JP' });
+const summary = await summarize('https://example.com/', { lang: 'ja-JP' });
 ```
 
 As a Fastify plugin (serves `GET /`, like upstream):
 
 ```ts
-import Summaly from '@tiramiss-community/chiramiss';
+import chiramiss from '@tiramiss-community/chiramiss';
 
-fastify.register(Summaly, { /* SummalyOptions */ });
+fastify.register(chiramiss, { /* SummarizeOptions */ });
 ```
 
 ### Options
@@ -161,7 +217,7 @@ Upstream options:
 |:--------------------------|:--------------------------------------------------|:---------------------------------|:------------|
 | **lang**                  | `string \| null`                                  | `null`                           | `Accept-Language` for the request |
 | **followRedirects**       | `boolean`                                         | `true`                           | Whether to follow redirects (at most 10) |
-| **plugins**               | `SummalyPlugin[]`                                 | `[]`                             | Custom plugins, tried after the built-in ones |
+| **plugins**               | `SummaryPlugin[]`                                 | `[]`                             | Custom plugins, tried after the built-in ones |
 | **agent**                 | `{ http?: http.Agent, https?: https.Agent }`      | none                             | Agents for the requests. A scheme with an agent leaves private IP blocking and proxying to it |
 | **userAgent**             | `string`                                          | `ChiramissBot/<version> (+...)`  | `User-Agent` for the request |
 | **responseTimeout**       | `number` (ms)                                     | `20000`                          | Timeout for connecting and for each wait for data (socket idle). `0` disables it |
@@ -186,7 +242,7 @@ form rather than as IPv4-mapped IPv6 (`::ffff:10.0.0.0/104`). Other notations th
 
 ### Caching and request sharing
 
-`summaly()` caches results and shares in-flight requests within the process by default. Two calls share a result
+`summarize()` caches results and shares in-flight requests within the process by default. Two calls share a result
 when the URL and every option that can change the result are the same: `lang`, `userAgent`, `followRedirects`, the
 timeouts, the size options, `allowedPrivateNetworks`, `proxy`, and the identity of the `agent` and `plugins` objects
 (a different agent object counts as a different request). `cache`, `coordinator`, `cacheTtl` and `errorCacheTtl` are
@@ -207,19 +263,19 @@ not part of the key.
   each entry's JSON form), and drops the oldest stored ones first. An entry estimated above 256 KiB is not stored; the
   caller still gets the result. `new MemorySummaryCache({ maxEntries, maxBytes, maxEntryBytes })` changes these.
 
-For independent caches (e.g. per configuration), use `createSummaly`:
+For independent caches (e.g. per configuration), use `createSummarizer`:
 
 ```ts
-import { createSummaly, MemorySummaryCache } from '@tiramiss-community/chiramiss';
+import { createSummarizer, MemorySummaryCache } from '@tiramiss-community/chiramiss';
 
-const summarize = createSummaly({
+const summarize = createSummarizer({
   cache: new MemorySummaryCache({ maxEntries: 5000 }),
   cacheTtl: 10 * 60 * 1000,
 });
 await summarize('https://example.com/', { lang: 'en' }); // per-call options are merged over the base
 ```
 
-`createSummaly(base?)` returns a function with the same signature as `summaly`, with its own cache and in-flight
+`createSummarizer(base?)` returns a function with the same signature as `summarize`, with its own cache and in-flight
 sharing (unless `base` passes other ones). `SummaryCache` (`get(key)` / `set(key, entry, ttlMs)`) and
 `InflightCoordinator` (`run(key, task)`) are small interfaces, so a shared cache such as Redis can be plugged in.
 `MemorySummaryCache`, `InProcessCoordinator` and `StatusError` are exported.
@@ -227,13 +283,13 @@ sharing (unless `base` passes other ones). `SummaryCache` (`get(key)` / `set(key
 ### Custom plugins
 
 ```ts
-import type { SummalyPlugin } from '@tiramiss-community/chiramiss';
+import type { SummaryPlugin } from '@tiramiss-community/chiramiss';
 
-const plugin: SummalyPlugin = {
+const plugin: SummaryPlugin = {
   test: url => url.hostname === 'example.com',
   summarize: async (url, opts) => ({ /* Summary */ }),
 };
-await summaly(url, { plugins: [plugin] });
+await summarize(url, { plugins: [plugin] });
 ```
 
 **Plugins do their own requests.** A plugin gets the URL and the options, as upstream, but not chiramiss's
@@ -263,12 +319,12 @@ What the proxy sees:
 ```sh
 pnpm install
 pnpm build
-SUMMALY_PORT=3000 node packages/server/built/index.js
+CHIRAMISS_PORT=3000 node packages/server/built/index.js
 ```
 
 Endpoints:
 
-- `GET /?url=<url>&lang=<lang>&...` returns the summary as JSON (`SummalyResult`). 400 `{ "error": "url is required" }`
+- `GET /?url=<url>&lang=<lang>&...` returns the summary as JSON (`SummaryResult`). 400 `{ "error": "url is required" }`
   without `url`, 500 `{ "error": ... }` when summarizing fails.
 - `GET /healthz` returns `{ "status": "ok" }`.
 
@@ -283,24 +339,28 @@ instances), and on SIGTERM / SIGINT finishes the requests in progress before exi
 
 Unset or empty variables are ignored. An invalid value stops the server at startup with an error.
 
-| Variable                              | Default                                       | Description |
-|:--------------------------------------|:----------------------------------------------|:------------|
-| **SUMMALY_HOST**                      | `localhost` (`0.0.0.0` in the Docker image)   | Listen address |
-| **SUMMALY_PORT**                      | `3000`                                        | Listen port (0-65535) |
-| **SUMMALY_LANG**                      | the `lang` query parameter                    | `Accept-Language` for the requests |
-| **SUMMALY_USER_AGENT**                | the `userAgent` query parameter, else `ChiramissBot/<version> (+...)` | `User-Agent` for the requests |
-| **SUMMALY_FOLLOW_REDIRECTS**          | the `followRedirects` query parameter, else `false` | Whether to follow redirects (`true` / `false` / `1` / `0`) |
-| **SUMMALY_RESPONSE_TIMEOUT**          | `20000`                                       | Connect / socket idle timeout in ms (0-2147483647, `0` = none). Upper bound for the query parameter |
-| **SUMMALY_OPERATION_TIMEOUT**         | `60000`                                       | Whole-request timeout in ms (0-2147483647, `0` = none). Upper bound for the query parameter |
-| **SUMMALY_CONTENT_LENGTH_LIMIT**      | `10485760`                                    | Maximum response size in bytes. Upper bound for the query parameter |
-| **SUMMALY_CONTENT_LENGTH_REQUIRED**   | `false`                                       | Reject responses without `content-length` (`true` / `false` / `1` / `0`) |
-| **SUMMALY_ALLOWED_PRIVATE_NETWORKS**  | none                                          | Comma-separated canonical CIDRs exempt from the private IP block, e.g. `10.0.0.0/8,fd00::/8` |
-| **SUMMALY_CACHE_TTL**                 | `300000`                                      | How long successful results are cached, in ms (`0` = not cached) |
-| **SUMMALY_ERROR_CACHE_TTL**           | `30000`                                       | How long failures are cached, in ms (`0` = not cached) |
-| **HTTP_PROXY** / `http_proxy`         | none                                          | Proxy for `http:` targets (`http:` or `https:` URL with a host) |
-| **HTTPS_PROXY** / `https_proxy`       | none                                          | Proxy for `https:` targets |
-| **NO_PROXY** / `no_proxy`             | none                                          | Hosts that bypass the proxy (see [Proxies](#proxies)) |
-| **SUMMALY_ALLOW_PRIVATE_IP**          | unset                                         | `true` turns the private IP block off. **For tests only** |
+Every `CHIRAMISS_*` variable below is also accepted under its summaly name, `SUMMALY_*` with the same suffix
+(`CHIRAMISS_HOST` → `SUMMALY_HOST`). `CHIRAMISS_<NAME>` wins when both are set; when it is unset or empty,
+`SUMMALY_<NAME>` is used (see [Names kept for summaly compatibility](#names-kept-for-summaly-compatibility)).
+
+| Variable                                | Default                                       | Description |
+|:----------------------------------------|:----------------------------------------------|:------------|
+| **CHIRAMISS_HOST**                      | `localhost` (`0.0.0.0` in the Docker image)   | Listen address |
+| **CHIRAMISS_PORT**                      | `3000`                                        | Listen port (0-65535) |
+| **CHIRAMISS_LANG**                      | the `lang` query parameter                    | `Accept-Language` for the requests |
+| **CHIRAMISS_USER_AGENT**                | the `userAgent` query parameter, else `ChiramissBot/<version> (+...)` | `User-Agent` for the requests |
+| **CHIRAMISS_FOLLOW_REDIRECTS**          | the `followRedirects` query parameter, else `false` | Whether to follow redirects (`true` / `false` / `1` / `0`) |
+| **CHIRAMISS_RESPONSE_TIMEOUT**          | `20000`                                       | Connect / socket idle timeout in ms (0-2147483647, `0` = none). Upper bound for the query parameter |
+| **CHIRAMISS_OPERATION_TIMEOUT**         | `60000`                                       | Whole-request timeout in ms (0-2147483647, `0` = none). Upper bound for the query parameter |
+| **CHIRAMISS_CONTENT_LENGTH_LIMIT**      | `10485760`                                    | Maximum response size in bytes. Upper bound for the query parameter |
+| **CHIRAMISS_CONTENT_LENGTH_REQUIRED**   | `false`                                       | Reject responses without `content-length` (`true` / `false` / `1` / `0`) |
+| **CHIRAMISS_ALLOWED_PRIVATE_NETWORKS**  | none                                          | Comma-separated canonical CIDRs exempt from the private IP block, e.g. `10.0.0.0/8,fd00::/8` |
+| **CHIRAMISS_CACHE_TTL**                 | `300000`                                      | How long successful results are cached, in ms (`0` = not cached) |
+| **CHIRAMISS_ERROR_CACHE_TTL**           | `30000`                                       | How long failures are cached, in ms (`0` = not cached) |
+| **HTTP_PROXY** / `http_proxy`           | none                                          | Proxy for `http:` targets (`http:` or `https:` URL with a host) |
+| **HTTPS_PROXY** / `https_proxy`         | none                                          | Proxy for `https:` targets |
+| **NO_PROXY** / `no_proxy`               | none                                          | Hosts that bypass the proxy (see [Proxies](#proxies)) |
+| **CHIRAMISS_ALLOW_PRIVATE_IP**          | unset                                         | `true` turns the private IP block off. **For tests only**. Read by the library, so it applies wherever the library runs |
 
 The upper-case proxy variables win over the lower-case ones. Proxy URLs and CIDRs are validated at startup with the
 same rules as the library options ([Options](#options), [Proxies](#proxies)); error messages never show proxy
@@ -318,7 +378,7 @@ with the server administrator in control:
   only when it is above 0 and not above that bound; otherwise the bound applies. A timeout variable set to `0` (no
   timeout) has no bound, so any timeout above 0 from the query is used. So if Misskey is configured with a
   larger limit than the server allows (for example a 20 MiB `urlPreviewMaximumContentLength`), the server's limit wins;
-  raise `SUMMALY_CONTENT_LENGTH_LIMIT` / `SUMMALY_OPERATION_TIMEOUT` to allow more.
+  raise `CHIRAMISS_CONTENT_LENGTH_LIMIT` / `CHIRAMISS_OPERATION_TIMEOUT` to allow more.
 - `contentLengthRequired`: `true` turns the check on; the query cannot turn it off.
 - Booleans must be exactly `true` or `false`. Malformed or repeated values are ignored.
 
@@ -330,7 +390,7 @@ curl 'http://127.0.0.1:3000/?url=https://example.com/'
 ```
 
 The image runs as the non-root `node` user, listens on `0.0.0.0:3000`, and has a `HEALTHCHECK` on `/healthz` (on
-`SUMMALY_PORT` when you change it).
+`CHIRAMISS_PORT`, or `SUMMALY_PORT`, when you change the port).
 Configure it with the [environment variables](#environment-variables) above.
 
 Tags: `X.Y.Z`, `X.Y`, `X` (from 1.0.0 on) and `latest`. The image version matches the library version.
@@ -362,7 +422,7 @@ To build the image yourself: `docker build -t chiramiss .`
   `SummalyBot/<version> (<server URL>; +https://github.com/misskey-dev/summaly/blob/master/README.md)` and passes it to
   the library (and to the summary proxy as `userAgent`). With chiramiss swapped in, `<version>` is chiramiss's version,
   so the name `SummalyBot` is combined with a chiramiss version number. chiramiss does not rewrite it. Administrators
-  can set their own User-Agent with Misskey's `urlPreviewUserAgent` setting (or `SUMMALY_USER_AGENT` on the server);
+  can set their own User-Agent with Misskey's `urlPreviewUserAgent` setting (or `CHIRAMISS_USER_AGENT` on the server);
   ideally Misskey would build it from the library it actually uses.
 - **Request sharing is per process.** Misskey runs a copy of the library in each process, so in-flight sharing and
   the in-memory cache work per process. The standalone server likewise shares within one instance.
