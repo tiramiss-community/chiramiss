@@ -141,6 +141,10 @@ Behavior that intentionally differs from summaly v5.5.2:
   Upstream ran chardet on the whole body first, which was the most expensive step of a summary.
   A page whose header or meta declares the wrong charset is now decoded as declared.
 - **oEmbed and favicon requests** use the same User-Agent, timeouts and size limit as the page request.
+- **Connections are reused within one summary.** The requests one summary sends to the same site (the HEAD that
+  follows redirects, the page, the favicon, oEmbed) share a keep-alive connection, and every connection is closed when
+  the summary ends; separate summaries never share one. This applies to chiramiss's own connections, not to a
+  caller-supplied `agent` or to proxied requests.
 - **Amazon** pages are fetched with `followRedirects: true` and `contentLengthRequired: false`, like upstream's
   Amazon plugin, whatever the caller set; the other settings (agent, User-Agent, timeouts, size limit) apply.
 - **Custom plugins** receive the options as the caller gave them, like upstream: keys that were not set stay
