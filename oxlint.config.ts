@@ -86,7 +86,6 @@ export default defineConfig({
 	},
 	ignorePatterns: [
 		'**/built',
-		'**/test',
 		'**/node_modules',
 	],
 	overrides: [
