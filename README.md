@@ -242,8 +242,8 @@ Options added by chiramiss:
 | **allowedPrivateNetworks** | `string[]`                                            | `[]`                | CIDRs exempt from the private IP block, e.g. `['10.0.0.0/8', 'fd00::/8']` |
 | **proxy**                  | `{ http?: string, https?: string, noProxy?: string }` | none                | Outbound proxy for `http:` / `https:` targets (see [Proxies](#proxies)) |
 | **cache**                  | `SummaryCache \| false`                               | in-memory cache     | Result cache. `false` disables it |
-| **cacheTtl**               | `number` (ms)                                         | `300000` (5 min)    | How long successful results are kept. `0` does not store them |
-| **errorCacheTtl**          | `number` (ms)                                         | `30000` (30 s)      | How long failures are kept. `0` does not store them |
+| **cacheTtl**               | `number` (ms)                                         | `300000` (5 min)    | How long successful results (and favicon checks that succeeded) are kept. `0` does not store them |
+| **errorCacheTtl**          | `number` (ms)                                         | `30000` (30 s)      | How long failures (and favicon checks that failed) are kept. `0` does not store them |
 | **coordinator**            | `InflightCoordinator \| false`                        | in-process sharing  | Shares in-flight requests for the same key. `false` disables it |
 
 `allowedPrivateNetworks` entries must be canonical CIDRs: IPv4 as four plain decimal numbers without leading zeros
@@ -279,9 +279,12 @@ not part of the key.
   sent without them (at most once per call), so `icon` does not depend on them.
 - When concurrent calls share one in-flight request but were given different `cache`, `cacheTtl` or `errorCacheTtl`,
   the first call's settings are used for storing the result; the later calls just receive it.
-- The default `MemorySummaryCache` holds up to 1000 entries and up to 64 MiB (estimated as 2 bytes per character of
+- The default `MemorySummaryCache` holds up to 2000 entries and up to 64 MiB (estimated as 2 bytes per character of
   each entry's JSON form), and drops the oldest stored ones first. An entry estimated above 256 KiB is not stored; the
   caller still gets the result. `new MemorySummaryCache({ maxEntries, maxBytes, maxEntryBytes })` changes these.
+  Favicon checks count as entries too: a summary of a page usually stores two (its result and its favicon check;
+  pages of one site share the latter), so 2000 entries hold at least 1000 summaries. Size `maxEntries` of your own
+  cache the same way.
 
 For independent caches (e.g. per configuration), use `createSummarizer`:
 
@@ -298,6 +301,10 @@ await summarize('https://example.com/', { lang: 'en' }); // per-call options are
 `createSummarizer(base?)` returns a function with the same signature as `summarize`, with its own cache and in-flight
 sharing (unless `base` passes other ones). `SummaryCache` (`get(key)` / `set(key, entry, ttlMs)`) and
 `InflightCoordinator` (`run(key, task)`) are small interfaces, so a shared cache such as Redis can be plugged in.
+`run` is called again from inside a running task: a summary's task runs its favicon check through `run` with another
+key and waits for it. An `InflightCoordinator` must therefore only make calls with the same key wait for each other;
+one that makes calls with different keys wait (a global lock, a limit of N tasks at once) blocks forever, because the
+summary holds its slot while its favicon check waits for one. Limit concurrency around `summarize` instead.
 `MemorySummaryCache`, `InProcessCoordinator` and `StatusError` are exported.
 
 ### Custom plugins
@@ -375,8 +382,8 @@ Every `CHIRAMISS_*` variable below is also accepted under its summaly name, `SUM
 | **CHIRAMISS_CONTENT_LENGTH_LIMIT**      | `10485760`                                    | Maximum response size in bytes. Upper bound for the query parameter |
 | **CHIRAMISS_CONTENT_LENGTH_REQUIRED**   | `false`                                       | Reject responses without `content-length` (`true` / `false` / `1` / `0`) |
 | **CHIRAMISS_ALLOWED_PRIVATE_NETWORKS**  | none                                          | Comma-separated canonical CIDRs exempt from the private IP block, e.g. `10.0.0.0/8,fd00::/8` |
-| **CHIRAMISS_CACHE_TTL**                 | `300000`                                      | How long successful results are cached, in ms (`0` = not cached) |
-| **CHIRAMISS_ERROR_CACHE_TTL**           | `30000`                                       | How long failures are cached, in ms (`0` = not cached) |
+| **CHIRAMISS_CACHE_TTL**                 | `300000`                                      | How long successful results (and favicon checks that succeeded) are cached, in ms (`0` = not cached) |
+| **CHIRAMISS_ERROR_CACHE_TTL**           | `30000`                                       | How long failures (and favicon checks that failed) are cached, in ms (`0` = not cached) |
 | **HTTP_PROXY** / `http_proxy`           | none                                          | Proxy for `http:` targets (`http:` or `https:` URL with a host) |
 | **HTTPS_PROXY** / `https_proxy`         | none                                          | Proxy for `https:` targets |
 | **NO_PROXY** / `no_proxy`               | none                                          | Hosts that bypass the proxy (see [Proxies](#proxies)) |
