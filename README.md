@@ -103,6 +103,10 @@ Behavior that intentionally differs from summaly v5.5.2:
   Upstream (got) effectively skipped it for compressed responses, so a compressed page whose `content-length`
   exceeds the limit is now rejected even if it would decompress to less.
 - **A timeout of `0`** (`responseTimeout`, `operationTimeout`) means no timeout, as in Node.js.
+- **The page encoding** is decided the way browsers do: BOM, then the `Content-Type` charset, then a
+  `<meta charset>` in the first 8 KB, and only then byte-level detection (chardet) on the first 16 KB.
+  Upstream ran chardet on the whole body first, which was the most expensive step of a summary.
+  A page whose header or meta declares the wrong charset is now decoded as declared.
 - **oEmbed and favicon requests** use the same User-Agent, timeouts and size limit as the page request.
 - **Amazon** pages are fetched with `followRedirects: true` and `contentLengthRequired: false`, like upstream's
   Amazon plugin, whatever the caller set; the other settings (agent, User-Agent, timeouts, size limit) apply.
