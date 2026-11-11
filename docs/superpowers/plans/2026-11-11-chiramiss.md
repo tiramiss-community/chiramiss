@@ -65,7 +65,11 @@ packages/chiramiss/
     http/
       status-error.ts             # StatusError（本家と同一の形）
       address-guard.ts            # AddressGuard: IP 判定、CIDR 例外、guarded lookup
-      proxy.ts                    # selectProxyUrl(), createProxyAgents()
+      proxy/                      # 関心ごとに分ける（Ruling R49）
+        index.ts                  # 下の3つの公開部分を re-export する
+        no-proxy.ts               # selectProxyUrl()（NO_PROXY の照合）
+        proxy-url.ts              # assertProxyOptions()、プロキシ URL の検証と userinfo の伏せ字
+        tunnel.ts                 # createProxyAgents()、CONNECT トンネルの agent
       transport.ts                # Transport の生成（agent / guard / proxy の組み合わせ）
       request.ts                  # fetchResponse(): node:http(s) 実装
       decode.ts                   # 展開（gzip/deflate/br）と文字コード判定
@@ -374,7 +378,7 @@ test('カスタムプラグインは組み込みより後に評価され、Gener
 ### Task 7: 外向きプロキシ
 
 **Files:**
-- Create: `packages/chiramiss/src/http/proxy.ts`
+- Create: `packages/chiramiss/src/http/proxy.ts`（後に Ruling R49 で `packages/chiramiss/src/http/proxy/` の `no-proxy.ts`・`proxy-url.ts`・`tunnel.ts`・`index.ts` に分けた）
 - Modify: `packages/chiramiss/src/http/transport.ts`
 - Test: `packages/chiramiss/test/proxy.test.ts`
 
