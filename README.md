@@ -155,6 +155,8 @@ Behavior that intentionally differs from summaly v5.5.2:
   `undefined` (defaults are not filled in) and `lang` is passed as given.
 - **Results are cached and in-flight requests are shared by default** (see [Caching](#caching-and-request-sharing)).
   Each caller gets its own copy, so modifying a result does not affect others.
+- **Favicon checks are cached and shared too**, so pages of one site summarized in a row (or at once) send one HEAD
+  for their common favicon instead of one each (see [Caching](#caching-and-request-sharing)).
 - **Default User-Agent** is `ChiramissBot/<version> (+https://github.com/tiramiss-community/chiramiss#readme)`.
 - **The server** additionally reads the options Misskey sends along with `url` (see [Query parameters](#query-parameters)),
   serves `GET /healthz`, supports outbound proxies, and answers 400 when `url` is not a single string
@@ -265,6 +267,9 @@ not part of the key.
 - The identity of `agent` and `plugins` objects in a key is per process (it includes a random value chosen when the
   process starts). A cache shared between processes (e.g. Redis) therefore only shares results of calls without
   `agent` or `plugins` across processes; calls with them are shared within one process.
+- The favicon check (the HEAD that decides `icon`) is cached and shared the same way, in the same cache and with the
+  same TTLs (`cacheTtl` when it succeeds, `errorCacheTtl` when it fails), keyed by the icon URL and the options that
+  can change that HEAD; only the resulting `icon` value is stored.
 - When concurrent calls share one in-flight request but were given different `cache`, `cacheTtl` or `errorCacheTtl`,
   the first call's settings are used for storing the result; the later calls just receive it.
 - The default `MemorySummaryCache` holds up to 1000 entries and up to 64 MiB (estimated as 2 bytes per character of
