@@ -1,0 +1,21 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		// Type-check against the lib's sources so that no lib build is needed.
+		// The lib's sources import each other through its own "@/" alias.
+		"paths": {
+			"@tiramiss-community/chiramiss": ["../chiramiss/src/index.ts"],
+			"@/*": ["../chiramiss/src/*"]
+		},
+		// The lib's sources are part of this program, so the root has to cover both packages.
+		"rootDir": "..",
+		"noEmit": true
+	},
+	"include": [
+		"./tsdown.config.ts",
+		"./vitest.config.ts",
+		"./src/**/*",
+		"./test/**/*",
+		"../chiramiss/src/@types/**/*"
+	]
+}
