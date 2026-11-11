@@ -275,7 +275,7 @@ test('渡した agent が実際に使われる'); // createConnection をフッ�
 
 **Interfaces:**
 - Produces:
-  - `type LinkTag = { rel: string; type: string | null; href: string }`
+  - `type LinkTag = { rel: string | null; type: string | null; href: string }`（rel なしの link も保持する。本家は `link[type="application/json+oembed"]` を rel 不問で選ぶため。Ruling R17）
   - `type HeadInfo = { title: string | null; meta(key: \`name:${string}\` | \`property:${string}\`): string | undefined; links: LinkTag[] }`。`meta()` は同じキーの最初の出現を返す（cheerio の `$('meta[...]').attr('content')` と同じ）。属性名は小文字で照合し、値は大文字小文字を区別する
   - `parseHead(html: string): HeadInfo` は htmlparser2 の `Parser` でストリーム処理する。`</head>` の閉じタグか `<body>` の開始タグに達した時点で止める。`<title>` が `<head>` の外にしかない場合に備え、停止後は title だけ探して読み進める
   - `loadDom(html: string): cheerio.CheerioAPI`（Amazon プロバイダ専用）
