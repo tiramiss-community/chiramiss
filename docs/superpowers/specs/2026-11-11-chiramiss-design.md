@@ -65,7 +65,7 @@ chiramiss は summaly の互換実装。Web ページの URL を受け取り、�
 
 - `GET /?url=...&lang=...` が要約の JSON を返す。`url` がなければ 400、要約に失敗したら 500 で `{ error: ... }` を返す。この形は本家と同じにする。
 - 本体はプロキシ経由で呼ぶときに `followRedirects`、`userAgent`、`operationTimeout`、`contentLengthLimit`、`contentLengthRequired` もクエリに付けて送ってくる。本家のサーバはこれらを無視している（`url` と `lang` しか読まない）。chiramiss のサーバはこれらのクエリも受け付けて反映する（機能の追加にあたる。設計者の判断）。ただし同じ項目の環境変数が設定されていれば、環境変数を優先する。サーバ管理者が上限を固定できるようにするため。
-  - **上限系のクエリ（`contentLengthLimit`、`responseTimeout`、`operationTimeout`）は厳しくする方向にしか効かない**（実装時の判断。Ruling R35）。上限は、環境変数が設定されていればその値、なければ lib の既定値（10485760 バイト、20000ms、60000ms）とし、クエリの値は 0 より大きく上限以下のときだけ使う。`contentLengthRequired` もクエリでは有効化しかできない。外部のクライアントが上限を外して、gzip 爆弾やタイムアウト無効化を起こせないようにするため。
+  - **上限系のクエリ（`contentLengthLimit`、`responseTimeout`、`operationTimeout`）は厳しくする方向にしか効かない**（実装時の判断。Ruling R35）。上限は、環境変数が設定されていればその値、なければ lib の既定値（10485760 バイト、20000ms、60000ms）とし、クエリの値は 0 より大きく上限以下のときだけ使う（タイムアウトの環境変数が 0、つまり無制限のときは上限がないので、0 より大きいクエリの値はそのまま使う。Ruling R38）。`contentLengthRequired` もクエリでは有効化しかできない。外部のクライアントが上限を外して、gzip 爆弾やタイムアウト無効化を起こせないようにするため。
 - 設定は環境変数で渡す。作業 fork の commit `25e3636`（`src/server/config.ts`）の変数名と仕様を引き継ぐ。変数は `SUMMALY_HOST`、`SUMMALY_PORT`、`SUMMALY_LANG`、`SUMMALY_USER_AGENT`、`SUMMALY_FOLLOW_REDIRECTS`、`SUMMALY_RESPONSE_TIMEOUT`、`SUMMALY_OPERATION_TIMEOUT`、`SUMMALY_CONTENT_LENGTH_LIMIT`、`SUMMALY_CONTENT_LENGTH_REQUIRED`。不正な値なら起動時にエラーで終了する。
 
 ### 4.3 環境
