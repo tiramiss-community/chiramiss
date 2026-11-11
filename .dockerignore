@@ -6,3 +6,4 @@ node_modules
 docs
 **/*.tsbuildinfo
 npm-debug.log
+.claude

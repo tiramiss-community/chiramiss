@@ -44,8 +44,9 @@ ChiramissBot/<version> (+https://github.com/tiramiss-community/chiramiss#readme)
 **What it does.** ChiramissBot makes link previews. When a user of a Misskey-family server (or another service
 that uses chiramiss) posts a URL, the server fetches that page once to build the preview card shown with the post
 (title, description, thumbnail). Besides the page itself it may fetch what the page names for the preview (its
-oEmbed endpoint and favicon) and follow its redirects. It does not crawl and does not follow other links. chiramiss
-keeps the summary only in a short-lived cache.
+oEmbed endpoint and favicon) and follow its redirects. For a few sites (Wikipedia, NVD) it reads their public API
+instead of the page's HTML (the page URL still gets a HEAD to follow its redirects). It does not crawl and does not
+follow other links. chiramiss keeps the summary only in a short-lived cache.
 
 **When it accesses your site.** Only when a URL of your site has been posted and its preview is needed. Concurrent
 requests for the same URL are merged into one and the result is cached for a few minutes, so a post that spreads
@@ -81,7 +82,8 @@ them, so code and configuration written for summaly keep working (see
   `thumbnailStyle`, `sitename`, `player` (`url`, `width`, `height`, `allow`), `sensitive`, `activityPub`,
   `fediverseCreator`, `url`.
 - Custom plugins (`SummaryPlugin`: `test(url)`, `summarize(url, opts)`) work as before. Built-in plugins cover
-  Amazon, Bluesky, Wikipedia and branch.io deep links, as upstream.
+  Amazon, Bluesky, Wikipedia and branch.io deep links, as upstream (plus NVD; see
+  [Differences from upstream](#differences-from-upstream)).
 - The package is ESM, so `await import('@misskey-dev/summaly')` keeps working.
 - `version` is chiramiss's own version (it does not continue upstream's numbering).
 - The published `.d.ts` does not depend on `fastify`, so frontend packages that import only `SummaryResult` (or
@@ -158,6 +160,12 @@ Behavior that intentionally differs from summaly v5.5.2:
   when the bytes break the response, the request is sent again on a new connection.
 - **Amazon** pages are fetched with `followRedirects: true` and `contentLengthRequired: false`, like upstream's
   Amazon plugin, whatever the caller set; the other settings (agent, User-Agent, timeouts, size limit) apply.
+- **NVD** CVE pages (`https://nvd.nist.gov/vuln/detail/CVE-YYYY-NNNN`) have a built-in provider that upstream lacks.
+  The page itself carries no metadata, so the summary comes from the NVD API 2.0 (`services.nvd.nist.gov`): the
+  title is the CVE ID with the CVSS severity and score of the newest CVSS version (e.g. `CVE-2026-16478 (HIGH 7.0)`),
+  and the description is the English CVE text. The API is used without a key, which NVD limits to 5 requests per 30
+  seconds per IP; beyond that the summary fails. Failures are cached for `errorCacheTtl` and results for `cacheTtl`.
+  Built-in providers are tried before custom plugins, so a custom plugin for `nvd.nist.gov` no longer gets these URLs.
 - **Custom plugins** receive the options as the caller gave them, like upstream: keys that were not set stay
   `undefined` (defaults are not filled in) and `lang` is passed as given.
 - **Results are cached and in-flight requests are shared by default** (see [Caching](#caching-and-request-sharing)).
