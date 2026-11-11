@@ -492,7 +492,7 @@ test('CacheEntry は JSON.stringify → JSON.parse で往復しても同じ結�
     - `SUMMALY_CACHE_TTL` → `cacheTtl`、`SUMMALY_ERROR_CACHE_TTL` → `errorCacheTtl`（非負整数）
   - `parseQueryOptions(query: Record<string, unknown>): Partial<SummalyOptions>`。`lang`、`followRedirects`（`'true'` / `'false'`）、`userAgent`、`responseTimeout`、`operationTimeout`、`contentLengthLimit`、`contentLengthRequired` を読む。不正な値や配列は「未指定」として捨てる（本家はこれらのクエリをすべて無視していたので、捨てても互換を崩さない）
   - `buildApp(config: ServerConfig, deps?: { cache?: SummaryCache; coordinator?: InflightCoordinator }): FastifyInstance`。`deps` は、将来 `REDIS_URL` から Redis 版を作って差し込むための口。今回は `index.ts` から何も渡さない
-    - `GET /`: オプションの優先順は `config.summalyOptions`（環境変数）→ クエリ → `{ followRedirects: false }`（本家プラグインと同じ既定値）。応答の形は Task 9 と同じ（400 / 500 / 要約）
+    - `GET /`: オプションの優先順は `config.summalyOptions`（環境変数）→ クエリ → `{ followRedirects: false }`（本家プラグインと同じ既定値）。上限系（`contentLengthLimit`、`responseTimeout`、`operationTimeout`、`contentLengthRequired`）のクエリは厳しくする方向にしか効かない（Ruling R35。spec 4.2 を参照）。応答の形は Task 9 と同じ（400 / 500 / 要約）
     - `GET /healthz`: 200 と `{ status: 'ok' }`
     - アプリごとに `createSummaly({ ...config.summalyOptions, ...deps })` を1つ作り、一本化とキャッシュを効かせる
   - `index.ts`: fork の `src/server/index.ts` と同じ起動処理と graceful shutdown（SIGINT / SIGTERM で `fastify.close()` してから exit）
@@ -508,7 +508,7 @@ test('SUMMALY_CACHE_TTL / SUMMALY_ERROR_CACHE_TTL を読む');
 // app.test.ts
 test('GET /healthz は 200 {status:"ok"}');
 test('クエリの contentLengthLimit が反映される'); // 上限より大きい HTML で 500
-test('同じ項目は環境変数がクエリより優先される'); // SUMMALY_CONTENT_LENGTH_LIMIT が大、クエリが小 → 成功
+test('上限系のクエリは厳しくする方向にしか効かない'); // Ruling R35
 test('不正なクエリ値は無視される'); // contentLengthLimit=abc でも 200
 test('followRedirects はクエリで true を指定したときだけリダイレクトを追う');
 test('本体の fetchSummaryFromProxy と同じクエリ形式で呼んで成功する');
