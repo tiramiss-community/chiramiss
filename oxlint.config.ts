@@ -55,10 +55,15 @@ const stylisticRules: DummyRuleMap = {
 	'@stylistic/no-multiple-empty-lines': ['error', { max: 1 }],
 	'@stylistic/object-curly-spacing': ['error', 'always'],
 	'@stylistic/padded-blocks': ['error', 'never'],
+	// 処理の区切りが見えるように空行を入れる。
+	// 変数の宣言のまとまりの後と、return の前は必ず空ける（宣言が続く間は空けなくてよい）。
 	'@stylistic/padding-line-between-statements': [
 		'error',
 		{ blankLine: 'always', prev: 'function', next: '*' },
 		{ blankLine: 'always', prev: '*', next: 'function' },
+		{ blankLine: 'always', prev: ['const', 'let'], next: '*' },
+		{ blankLine: 'any', prev: ['const', 'let'], next: ['const', 'let'] },
+		{ blankLine: 'always', prev: '*', next: 'return' },
 	],
 	'@stylistic/quotes': ['warn', 'single'],
 	'@stylistic/semi': ['error', 'always'],
