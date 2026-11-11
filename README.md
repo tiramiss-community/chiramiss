@@ -44,7 +44,7 @@ ChiramissBot/<version> (+https://github.com/tiramiss-community/chiramiss#readme)
 **What it does.** ChiramissBot makes link previews. When a user of a Misskey-family server (or another service
 that uses chiramiss) posts a URL, the server fetches that page once to build the preview card shown with the post
 (title, description, thumbnail). Besides the page itself it may fetch what the page names for the preview (its
-oEmbed endpoint and favicon) and follow its redirects. For a few sites (Wikipedia, NVD) it reads their public API
+oEmbed endpoint and favicon) and follow its redirects. For a few sites (Wikipedia, NVD, npm) it reads their public API
 instead of the page's HTML (the page URL still gets a HEAD to follow its redirects). It does not crawl and does not
 follow other links. chiramiss keeps the summary only in a short-lived cache.
 
@@ -82,7 +82,7 @@ them, so code and configuration written for summaly keep working (see
   `thumbnailStyle`, `sitename`, `player` (`url`, `width`, `height`, `allow`), `sensitive`, `activityPub`,
   `fediverseCreator`, `url`.
 - Custom plugins (`SummaryPlugin`: `test(url)`, `summarize(url, opts)`) work as before. Built-in plugins cover
-  Amazon, Bluesky, Wikipedia and branch.io deep links, as upstream (plus NVD; see
+  Amazon, Bluesky, Wikipedia and branch.io deep links, as upstream (plus NVD and npm; see
   [Differences from upstream](#differences-from-upstream)).
 - The package is ESM, so `await import('@misskey-dev/summaly')` keeps working.
 - `version` is chiramiss's own version (it does not continue upstream's numbering).
@@ -166,6 +166,14 @@ Behavior that intentionally differs from summaly v5.5.2:
   and the description is the English CVE text. The API is used without a key, which NVD limits to 5 requests per 30
   seconds per IP; beyond that the summary fails. Failures are cached for `errorCacheTtl` and results for `cacheTtl`.
   Built-in providers are tried before custom plugins, so a custom plugin for `nvd.nist.gov` no longer gets these URLs.
+- **npm** package pages (`https://www.npmjs.com/package/<name>`, `/package/@<scope>/<name>`, either with
+  `/v/<version>`; also on `npmjs.com`, `www.npmjs.org` and `npmjs.org`) have a built-in provider that upstream lacks.
+  npmjs.com answers bots with a Cloudflare challenge instead of the page, so the summary comes from the public npm
+  registry (`registry.npmjs.org`, the `latest` dist-tag or the version in the URL): the title is the package name
+  (`<name>@<version>` when the URL names a version) and the description is the package's description. An unknown
+  package or version (the registry answers 404) makes the summary fail. Package names are case-sensitive, so the name
+  in the URL is used as is. Built-in providers are tried before custom plugins, so a custom plugin for `npmjs.com`
+  (or `npmjs.org`) no longer gets these URLs.
 - **Custom plugins** receive the options as the caller gave them, like upstream: keys that were not set stay
   `undefined` (defaults are not filled in) and `lang` is passed as given.
 - **Results are cached and in-flight requests are shared by default** (see [Caching](#caching-and-request-sharing)).
