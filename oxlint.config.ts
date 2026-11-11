@@ -16,6 +16,9 @@ const jsRules: DummyRuleMap = {
 	'no-inner-declarations': ['off'],
 	'no-sparse-arrays': ['off'],
 	'import/no-default-export': ['warn'],
+	// 1行の if / else / for / while / do は書かず、必ず {} のブロックにして本体を次の行に書く。
+	// return / continue / throw などで処理が途切れる位置を、行の左側だけを見て追えるようにするため。
+	'curly': ['error', 'all'],
 };
 
 const tsRules: DummyRuleMap = {
@@ -34,7 +37,7 @@ const tsRules: DummyRuleMap = {
 const stylisticRules: DummyRuleMap = {
 	'@stylistic/array-bracket-spacing': ['error', 'never'],
 	'@stylistic/arrow-spacing': ['error', { before: true, after: true }],
-	'@stylistic/brace-style': ['error', '1tbs', { allowSingleLine: true }],
+	'@stylistic/brace-style': ['error', '1tbs', { allowSingleLine: false }],
 	'@stylistic/comma-dangle': ['error', 'always-multiline'],
 	'@stylistic/comma-spacing': ['error', { before: false, after: true }],
 	'@stylistic/eol-last': ['error', 'always'],
@@ -52,7 +55,6 @@ const stylisticRules: DummyRuleMap = {
 	'@stylistic/no-multiple-empty-lines': ['error', { max: 1 }],
 	'@stylistic/object-curly-spacing': ['error', 'always'],
 	'@stylistic/padded-blocks': ['error', 'never'],
-	'@stylistic/nonblock-statement-body-position': ['error', 'beside'],
 	'@stylistic/padding-line-between-statements': [
 		'error',
 		{ blankLine: 'always', prev: 'function', next: '*' },
