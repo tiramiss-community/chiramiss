@@ -12,7 +12,7 @@
 	"type": "module",
 	"main": "./built/index.js",
 	"engines": {
-		"node": ">=26.4.0"
+		"node": "^22.22.2 || ^24.17.0 || >=26.4.0"
 	},
 	"scripts": {
 		"build": "tsdown",

@@ -15,7 +15,7 @@
 - lib の npm 名は `@tiramiss-community/chiramiss`。サーバのパッケージ名は `@tiramiss-community/chiramiss-server`（`"private": true`）
 - リポジトリ URL は `https://github.com/tiramiss-community/chiramiss`（各 `package.json` の `repository.url` もこれ。Trusted Publishing はこの一致を見る）
 - ESM のみ（`"type": "module"`）
-- `engines.node` は `>=26.4.0`。Docker のベースイメージは Node 26 系
+- `engines.node` は本体と同じ `^22.22.2 || ^24.17.0 || >=26.4.0`（Ruling R44）。Node 24 以降にしかない API（`RegExp.escape` など）にはフォールバックを用意する。Docker のベースイメージは Node 26 系
 - パッケージマネージャは `pnpm@12.6.0`。`pnpm-workspace.yaml` の `saveExact`、`minimumReleaseAge: 10080`、`minimumReleaseAgeStrict: false` は本家の設定を踏襲する
 - devDependencies のバージョンは本家 `~/develop/summaly/package.json` に揃える。typescript 7.0.2、tsdown 0.23.0、vitest 5.0.1、oxlint 1.85.0、fastify 5.12.6
 - lib の実行時依存に fastify を入れない。公開する `.d.ts` も `fastify` を参照しないこと
@@ -550,7 +550,7 @@ test('本体の fetchSummaryFromProxy と同じクエリ形式で呼んで成功
 - Create: `.github/workflows/ci.yml`、`.github/workflows/release.yml`、`.changeset/initial-release.md`、`README.md`、`docs/publishing.md`
 
 内容:
-- `ci.yml`: `pull_request` と `push`（main）で実行する。pnpm と Node 26 を用意して、`pnpm install --frozen-lockfile`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm --filter @tiramiss-community/chiramiss typecheck:compat` を走らせる。別ジョブで `docker/build-push-action` を `push: false`、`platforms: linux/amd64,linux/arm64` で走らせる
+- `ci.yml`: `pull_request` と `push`（main）で実行する。pnpm と Node（22・24・26 の matrix。Ruling R44）を用意して、`pnpm install --frozen-lockfile`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm --filter @tiramiss-community/chiramiss typecheck:compat` を走らせる。別ジョブで `docker/build-push-action` を `push: false`、`platforms: linux/amd64,linux/arm64` で走らせる
 - `release.yml`: `push`（main）で実行する。権限は `contents: write`、`pull-requests: write`、`id-token: write`、`packages: write`
   - job `release`: `changesets/action` で、`publish: pnpm release` を指定する。npm トークンは渡さない（Trusted Publishing）。出力 `published` を job output にする
   - job `docker`: `needs: release`、`if: needs.release.outputs.published == 'true'`。`packages/server/package.json` の version を読み、`docker/metadata-action` でタグ `X.Y.Z`、`X.Y`、`X`、`latest` を作る（0.x の間は `X` タグを付けない）。ghcr にログインし、amd64 / arm64 でビルドして push する

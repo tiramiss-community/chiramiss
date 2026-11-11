@@ -4,7 +4,7 @@ A [summaly](https://github.com/misskey-dev/summaly)-compatible library that summ
 returns the page's title, description, thumbnail, icon, oEmbed player and so on. It is a drop-in replacement for
 `@misskey-dev/summaly` v5.5.2 that blocks requests to private IP addresses before connecting (redirects included),
 keeps per-call settings per call, shares in-flight requests for the same URL and caches results for a short time.
-Requires Node.js 26.4.0 or later. ESM only.
+Requires Node.js `^22.22.2 || ^24.17.0 || >=26.4.0`. ESM only.
 
 ## Install
 
