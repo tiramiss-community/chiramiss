@@ -429,7 +429,7 @@ test('agent を渡した場合はプロキシ設定を無視する');
   - `type SerializedError = { name: string; message: string; statusCode?: number; statusMessage?: string }`
   - `type CacheEntry = { kind: 'ok'; value: SummalyResult } | { kind: 'error'; error: SerializedError }`（JSON にできる形に限る。将来 Redis に入れるため）
   - `interface SummaryCache { get(key: string): Promise<CacheEntry | undefined>; set(key: string, entry: CacheEntry, ttlMs: number): Promise<void> }`
-  - `class MemorySummaryCache implements SummaryCache { constructor(opts?: { maxEntries?: number /* 既定 1000 */ }) }`（期限切れは get のときに捨てる。上限を超えたら古いものから捨てる）
+  - `class MemorySummaryCache implements SummaryCache { constructor(opts?: { maxEntries?: number /* 既定 1000 */; maxBytes?: number /* 既定 64 MiB */; maxEntryBytes?: number /* 既定 256 KiB。超える結果は保存しない */ }) }`（Ruling R46）（期限切れは get のときに捨てる。上限を超えたら古いものから捨てる）
   - `interface InflightCoordinator { run<T>(key: string, task: () => Promise<T>): Promise<T> }`。同じ key で実行中なら、新しく task を走らせずにその結果を共有する。将来の Redis 版は、ロックを取れたら task を実行し、取れなければキャッシュに結果が入るのを待つ実装になる
   - `class InProcessCoordinator implements InflightCoordinator`（`Map<string, Promise>`、完了時に削除）
   - `objectId(obj: object): number`（WeakMap で採番する）と `buildRequestKey(url: string, opts: SummalyOptions): string`。key の構成要素は、url、`lang`、`userAgent`、`followRedirects`、`responseTimeout`、`operationTimeout`、`contentLengthLimit`、`contentLengthRequired`、`allowedPrivateNetworks`、`proxy`、`agent.http` / `agent.https` の objectId、`plugins` の各 objectId（objectId にはプロセスごとに1回だけ作る乱数を添える。別プロセスと外部キャッシュを共有しても同一性が重ならないように。Ruling R47）、`process.env.SUMMALY_ALLOW_PRIVATE_IP`

@@ -70,7 +70,7 @@ chiramiss は summaly の互換実装。Web ページの URL を受け取り、�
 
 ### 4.3 環境
 
-- Node.js のみ。サポートする最低バージョンは本体に合わせる（tiramiss の `.node-version` は 26.4.0）。
+- Node.js のみ。サポートするバージョンは本体の `engines` に合わせて `^22.22.2 || ^24.17.0 || >=26.4.0` とする（実装時の判断。Ruling R44。当初は `.node-version` の 26.4.0 を最低としていたが、本体を Node 22 / 24 で動かす環境で strict engine のインストールが失敗するため改めた）。Docker イメージは Node 26 を使う。
 - パッケージマネージャは pnpm（本体と同じ）。monorepo には pnpm workspace を使う。
 - TypeScript。
 - ライセンスは MIT。本家由来のコードやテストデータには、本家の著作権表示を残す。
