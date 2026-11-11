@@ -270,7 +270,7 @@ not part of the key.
 - The favicon check (the HEAD that decides `icon`) is cached and shared the same way, in the same cache and with the
   same TTLs (`cacheTtl` when it succeeds, `errorCacheTtl` when it fails), keyed by the icon URL and the options that
   can change that HEAD; only the resulting `icon` value is stored.
-- A call reads its options (copying `allowedPrivateNetworks`, `proxy` and `plugins`) and the private IP environment
+- A call reads its options (copying `allowedPrivateNetworks`, `proxy`, `agent` and `plugins`) and the private IP environment
   variables once, when it starts, and builds its keys and its connections from that reading. Changing them while the
   call runs affects later calls only, so a result obtained with private IPs allowed is never stored under the key of
   a call that does not allow them.
