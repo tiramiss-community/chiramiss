@@ -14,6 +14,10 @@ export default defineConfig({
 			'@': libSrc,
 		},
 	},
+	test: {
+		// Same reset as the lib's tests: private IP handling must not depend on the developer's shell.
+		setupFiles: ['../chiramiss/test/setup.ts'],
+	},
 	define: {
 		_VERSION_: JSON.stringify(JSON.parse(readFileSync(libPackageJson, 'utf-8')).version),
 	},
