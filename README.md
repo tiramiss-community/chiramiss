@@ -270,6 +270,9 @@ not part of the key.
 - The favicon check (the HEAD that decides `icon`) is cached and shared the same way, in the same cache and with the
   same TTLs (`cacheTtl` when it succeeds, `errorCacheTtl` when it fails), keyed by the icon URL and the options that
   can change that HEAD; only the resulting `icon` value is stored.
+- A `SummaryCache` whose `set` fails does not fail the call: the result is returned (to every caller sharing it)
+  without being stored. A failing `get` or coordinator fails the summary; for the favicon check, the HEAD is then
+  sent without them (at most once per call), so `icon` does not depend on them.
 - When concurrent calls share one in-flight request but were given different `cache`, `cacheTtl` or `errorCacheTtl`,
   the first call's settings are used for storing the result; the later calls just receive it.
 - The default `MemorySummaryCache` holds up to 1000 entries and up to 64 MiB (estimated as 2 bytes per character of
