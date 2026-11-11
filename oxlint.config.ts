@@ -90,7 +90,7 @@ export default defineConfig({
 	],
 	overrides: [
 		{
-			files: ['**/*.js', '**/*.jsx'],
+			files: ['**/*.js', '**/*.mjs', '**/*.cjs', '**/*.jsx'],
 			rules: {
 				...jsRules,
 				...stylisticRules,
