@@ -169,9 +169,6 @@ importers:
       '@changesets/cli':
         specifier: 3.0.3
         version: 3.0.3
-      '@misskey-dev/oxlint-fmt-config':
-        specifier: 0.1.1
-        version: 0.1.1(@stylistic/eslint-plugin@5.10.0(eslint@10.14.0))(oxlint-tsgolint@7.0.2002)(oxlint@1.85.0(oxlint-tsgolint@7.0.2002))
       '@stylistic/eslint-plugin':
         specifier: 5.10.0
         version: 5.10.0(eslint@10.14.0)
@@ -422,16 +419,6 @@ packages:
   '@manypkg/tools@2.1.2':
     resolution: {integrity: sha512-6QEf6yqFbETdwGITKq57aYoPfX/3K8XFNwsAlx0C1M7o8cb79sv1M3w+tWuWvIcSbNqrLF7OD7YpZMVVz335hQ==}
     engines: {node: '>=20.0.0'}
-
-  '@misskey-dev/oxlint-fmt-config@0.1.1':
-    resolution: {integrity: sha512-Tu4yIB/GzMdDr+JQWPBb95zkfV2CTfEIU8Vcds0EmIyVElP2+MOEHjEoNJVJkWcy5xCXOmSoj/1iTTP+4gkJ+A==}
-    peerDependencies:
-      '@stylistic/eslint-plugin': 5.10.0
-      oxlint: ^1
-      oxlint-tsgolint: ^7
-    peerDependenciesMeta:
-      '@stylistic/eslint-plugin':
-        optional: true
 
   '@oxc-project/types@0.156.0':
     resolution: {integrity: sha512-1Duyg48TdJNdyhEB8Xn1L36bT9Pv6GUtlKjHxOys8xkaF/rQq3XJE+bAurSK/AgIz5mGFsb77cn9Pb20+WCScw==}
@@ -2090,13 +2077,6 @@ snapshots:
       jju: 1.4.0
       tinyglobby: 0.2.17
       yaml: 2.9.1
-
-  '@misskey-dev/oxlint-fmt-config@0.1.1(@stylistic/eslint-plugin@5.10.0(eslint@10.14.0))(oxlint-tsgolint@7.0.2002)(oxlint@1.85.0(oxlint-tsgolint@7.0.2002))':
-    dependencies:
-      oxlint: 1.85.0(oxlint-tsgolint@7.0.2002)
-      oxlint-tsgolint: 7.0.2002
-    optionalDependencies:
-      '@stylistic/eslint-plugin': 5.10.0(eslint@10.14.0)
 
   '@oxc-project/types@0.156.0': {}
 

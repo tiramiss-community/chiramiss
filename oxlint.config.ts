@@ -1,4 +1,4 @@
-// 元にした設定: @misskey-dev/oxlint-fmt-config (MIT License, Copyright (c) 2026 Misskey Project)
+// Derived from @misskey-dev/oxlint-fmt-config (MIT)
 import { defineConfig, type DummyRuleMap } from 'oxlint';
 
 const jsRules: DummyRuleMap = {

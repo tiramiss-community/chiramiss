@@ -21,7 +21,6 @@
 	},
 	"devDependencies": {
 		"@changesets/cli": "3.0.3",
-		"@misskey-dev/oxlint-fmt-config": "0.1.1",
 		"@stylistic/eslint-plugin": "5.10.0",
 		"oxlint": "1.85.0",
 		"oxlint-tsgolint": "7.0.2002",
