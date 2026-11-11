@@ -145,7 +145,7 @@ lib の出力先は `packages/chiramiss/built/`（本家と同じ）、サーバ
 }
 ```
 
-- lib の `package.json` は `"version": "0.0.0"`、`main: ./built/index.js`、`types: ./built/index.d.ts`、`exports: { ".": { "types": "./built/index.d.ts", "import": "./built/index.js" } }`、`files: ["built", "LICENSE"]`、`publishConfig: { "access": "public", "provenance": true }` とする
+- lib の `package.json` は `"version": "0.0.0"`、`main: ./built/index.js`、`types: ./built/index.d.ts`、`exports: { ".": { "types": "./built/index.d.ts", "import": "./built/index.js", "default": "./built/index.js" }, "./package.json": "./package.json" }`（`default` と `./package.json` は Ruling R50）、`files: ["built", "LICENSE"]`、`publishConfig: { "access": "public", "provenance": true }` とする
 - `tsdown.config.ts` と `vitest.config.ts` は、本家と同じく `_VERSION_` を `package.json` の version から define する。`@/` エイリアスも本家と同じ
 - ルートの scripts: `build`（`pnpm -r build`）、`test`（`pnpm -r test`）、`lint`（`oxlint`）、`typecheck`（`pnpm -r typecheck`）、`release`（`pnpm build && changeset publish`）
 
