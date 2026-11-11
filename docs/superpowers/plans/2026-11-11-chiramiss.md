@@ -180,7 +180,7 @@ test('index から version が export されている', async () => {
   - `isAddressAllowed(guard: AddressGuard, ip: string): boolean`（IPv4-mapped IPv6 は IPv4 に直してから判定する。`range() === 'unicast'` か、例外ネットワークに含まれれば true）
   - `assertHostAllowed(guard: AddressGuard, hostname: string): Promise<void>`（IP リテラルはそのまま判定する。ホスト名なら `dns.lookup(..., { all: true })` で全アドレスを判定する。1つでも不可なら `new StatusError(\`Private IP rejected ${ip}\`, 400, 'Private IP Rejected')`）
   - `createGuardedLookup(guard: AddressGuard): net.LookupFunction`（ソケット接続時の名前解決にも同じ判定をかける。DNS rebinding 対策）
-  - `isGuardDisabled(agent: SummalyOptions['agent'], env = process.env): boolean`（本家互換: `env.SUMMALY_ALLOW_PRIVATE_IP === 'true'` か、`agent` に実際の agent が1つ以上あれば true（`{ http: undefined }` は false、Ruling R9）。空オブジェクトなら false）
+  - `privateIpAllowedByEnv(env = process.env): boolean`（本家互換: `env.SUMMALY_ALLOW_PRIVATE_IP === 'true'` のときだけ true。環境変数だけを見る（Ruling R48。旧名 `isGuardDisabled(agent, env)`）。呼び出し側の agent による遮断の引き渡しは scheme ごとに `createTransport` が決める（Ruling R9 / R12））
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -197,10 +197,10 @@ test('assertHostAllowed は localhost を StatusError(400) で拒否する', asy
   const e = await assertHostAllowed(createAddressGuard(), 'localhost').catch(e => e);
   expect(e).toBeInstanceOf(StatusError); expect(e.statusCode).toBe(400); expect(e.message).toContain('Private IP rejected');
 });
-test('isGuardDisabled: agent あり→true、空オブジェクト→false、env=true→true', () => {
-  expect(isGuardDisabled({ http: new http.Agent() }, {})).toBe(true);
-  expect(isGuardDisabled({}, {})).toBe(false);
-  expect(isGuardDisabled(undefined, { SUMMALY_ALLOW_PRIVATE_IP: 'true' })).toBe(true);
+test('privateIpAllowedByEnv: SUMMALY_ALLOW_PRIVATE_IP が true のときだけ true', () => {
+  expect(privateIpAllowedByEnv({ SUMMALY_ALLOW_PRIVATE_IP: 'true' })).toBe(true);
+  expect(privateIpAllowedByEnv({})).toBe(false);
+  expect(privateIpAllowedByEnv({ SUMMALY_ALLOW_PRIVATE_IP: 'false' })).toBe(false);
 });
 ```
 
@@ -221,7 +221,7 @@ test('isGuardDisabled: agent あり→true、空オブジェクト→false、env
 - Consumes: Task 2 の `AddressGuard`、`assertHostAllowed`、`createGuardedLookup`、`StatusError`
 - Produces:
   - `type Transport = { agents: { http?: http.Agent; https?: https.Agent }; guard: AddressGuard | null; proxy: ProxyOptions | null }`
-  - `createTransport(opts: { agent?: SummalyOptions['agent']; allowedPrivateNetworks?: string[]; proxy?: ProxyOptions }, env = process.env): Transport`（guard の有無は `isGuardDisabled` で決める。agent が渡されたら proxy は無視する。proxy の agent 生成は Task 7 で足す。この時点の `proxy` は保持するだけ）
+  - `createTransport(opts: { agent?: SummalyOptions['agent']; allowedPrivateNetworks?: string[]; proxy?: ProxyOptions }, env = process.env): Transport`（guard の有無は `privateIpAllowedByEnv(env)` と、呼び出し側が両方の scheme の agent を渡したかで決める（Ruling R9 / R12 / R48）。agent が渡されたら proxy は無視する。proxy の agent 生成は Task 7 で足す。この時点の `proxy` は保持するだけ）
   - `type FetchRequest = { url: string; method: 'GET' | 'HEAD'; headers: Record<string, string | undefined>; typeFilter?: RegExp; followRedirects: boolean; responseTimeout: number; operationTimeout: number; contentLengthLimit: number; contentLengthRequired: boolean }`
   - `type FetchResult = { url: string /* 最終 URL */; statusCode: number; headers: http.IncomingHttpHeaders; body: Buffer /* 展開済み */ }`
   - `fetchResponse(transport: Transport, req: FetchRequest): Promise<FetchResult>`
