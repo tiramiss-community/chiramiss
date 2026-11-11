@@ -5,8 +5,8 @@ services:
     # ports は公開しない。Misskey と同じネットワークに参加させ、
     # Misskey 側から http://chiramiss:3000/ で呼び出す想定。
     # environment:
-    #   SUMMALY_USER_AGENT: "MyBot/1.0"
-    #   SUMMALY_ALLOWED_PRIVATE_NETWORKS: "10.0.0.0/8"
+    #   CHIRAMISS_USER_AGENT: "MyBot/1.0"
+    #   CHIRAMISS_ALLOWED_PRIVATE_NETWORKS: "10.0.0.0/8"
     #   HTTPS_PROXY: "http://proxy.example:3128"
     #   NO_PROXY: "localhost,127.0.0.1"
     # networks:

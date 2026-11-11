@@ -21,11 +21,15 @@ RUN pnpm --filter @tiramiss-community/chiramiss-server deploy --prod /out
 
 FROM ${NODE_IMAGE}
 LABEL org.opencontainers.image.source="https://github.com/tiramiss-community/chiramiss"
-ENV NODE_ENV=production SUMMALY_HOST=0.0.0.0 SUMMALY_PORT=3000
+# Listen on all interfaces by default. The default is given under the lowest-precedence name (SUMMALY_HOST, which the
+# server reads only when CHIRAMISS_HOST is unset or empty), so that CHIRAMISS_HOST or SUMMALY_HOST given at run time
+# overrides it. The port is left to the server's default (3000) for the same reason: an image-level CHIRAMISS_PORT
+# would hide a SUMMALY_PORT given at run time.
+ENV NODE_ENV=production SUMMALY_HOST=0.0.0.0
 WORKDIR /app
 COPY --from=build /out/ ./
 USER node
 EXPOSE 3000
-# Follows SUMMALY_PORT (unset or empty means 3000, as in the server's config).
-HEALTHCHECK CMD node -e "fetch('http://127.0.0.1:'+(process.env.SUMMALY_PORT||3000)+'/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+# Follows the port the server reads: CHIRAMISS_PORT, then SUMMALY_PORT, then 3000 (empty means unset, as in the server's config).
+HEALTHCHECK CMD node -e "fetch('http://127.0.0.1:'+(process.env.CHIRAMISS_PORT||process.env.SUMMALY_PORT||3000)+'/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
 CMD ["node", "built/index.js"]
