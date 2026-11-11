@@ -15,7 +15,6 @@ const jsRules: DummyRuleMap = {
 	'no-empty': ['warn'],
 	'no-inner-declarations': ['off'],
 	'no-sparse-arrays': ['off'],
-	'import/no-default-export': ['warn'],
 	// 1行の if / else / for / while / do は書かず、必ず {} のブロックにして本体を次の行に書く。
 	// return / continue / throw などで処理が途切れる位置を、行の左側だけを見て追えるようにするため。
 	'curly': ['error', 'all'],
