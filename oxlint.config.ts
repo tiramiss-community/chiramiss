@@ -65,7 +65,8 @@ const stylisticRules: DummyRuleMap = {
 		{ blankLine: 'any', prev: ['const', 'let'], next: ['const', 'let'] },
 		{ blankLine: 'always', prev: '*', next: 'return' },
 	],
-	'@stylistic/quotes': ['warn', 'single'],
+	// ' を含む文字列は \' と書くより "..." のほうが読みやすいので、その場合だけ " を許す。
+	'@stylistic/quotes': ['warn', 'single', { avoidEscape: true }],
 	'@stylistic/semi': ['error', 'always'],
 	'@stylistic/semi-spacing': ['error', { before: false, after: true }],
 	'@stylistic/space-before-blocks': ['error', 'always'],
