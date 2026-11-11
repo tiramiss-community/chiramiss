@@ -33,7 +33,7 @@
 		"build": "tsdown",
 		"test": "vitest run",
 		"typecheck": "tsc --noEmit -p tsconfig.json",
-		"typecheck:compat": "node -e \"if (/['\\\"]fastify['\\\"\\/]/.test(require('fs').readFileSync('built/index.d.ts','utf8'))) { console.error('built/index.d.ts references the fastify module'); process.exit(1) }\" && tsc --noEmit -p tsconfig.compat.json"
+		"typecheck:compat": "tsc -p tsconfig.compat.json && node scripts/check-no-fastify.mjs"
 	},
 	"devDependencies": {
 		"@types/node": "26.6.2",

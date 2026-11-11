@@ -12,5 +12,6 @@
 		"./vitest.config.ts",
 		"./src/**/*",
 		"./test/**/*"
-	]
+	],
+	"exclude": ["./test/compat/**/*"]
 }
