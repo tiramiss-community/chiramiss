@@ -535,8 +535,8 @@ test('本体の fetchSummaryFromProxy と同じクエリ形式で呼んで成功
 - Consumes: Task 10 の `packages/server/built/index.js` と `/healthz`
 
 内容:
-- `Dockerfile` はマルチステージにする。build ステージで `corepack enable`、`pnpm install --frozen-lockfile`、`pnpm build`、`pnpm --filter @tiramiss-community/chiramiss-server deploy --prod /out` を行う（pnpm 12 の `deploy` が workspace 依存を解決するのに必要な設定があれば、ここで入れる）。runtime ステージは Node 26 の slim イメージにし、`/out` だけをコピーする
-- runtime の設定: `ENV NODE_ENV=production SUMMALY_HOST=0.0.0.0 SUMMALY_PORT=3000`、`EXPOSE 3000`、`USER node`、`HEALTHCHECK CMD node -e "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"`、`CMD ["node", "built/index.js"]`
+- `Dockerfile` はマルチステージにする。build ステージで `corepack enable`（corepack は版を固定して入れる）、`pnpm install --frozen-lockfile`（層のキャッシュが効くよう、manifest と lockfile だけを先にコピーして実行する）、`pnpm build`、`pnpm --filter @tiramiss-community/chiramiss-server deploy --prod /out` を行う（pnpm 12 の `deploy` が workspace 依存を解決するのに必要な設定があれば、ここで入れる）。runtime ステージは Node 26 の slim イメージにし、`/out` だけをコピーする
+- runtime の設定: `ENV NODE_ENV=production SUMMALY_HOST=0.0.0.0 SUMMALY_PORT=3000`、`EXPOSE 3000`、`USER node`、`HEALTHCHECK CMD node -e "fetch('http://127.0.0.1:'+(process.env.SUMMALY_PORT||3000)+'/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"`（`SUMMALY_PORT` に追従する。Ruling R51）、`CMD ["node", "built/index.js"]`
 - OCI ラベル `org.opencontainers.image.source=https://github.com/tiramiss-community/chiramiss`（ghcr とリポジトリの紐付けに使われる）
 - `docker-compose.example.yml` は `services.chiramiss` だけを定義する。`image: ghcr.io/tiramiss-community/chiramiss:latest`、`restart: unless-stopped`、主な環境変数はコメントで例示する。ports は公開せず、Misskey と同じネットワークから `http://chiramiss:3000/` で呼ぶ想定をコメントで説明する
 

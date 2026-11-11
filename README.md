@@ -19,7 +19,7 @@ Compared with upstream summaly, chiramiss
 - parses only what it needs (mostly `<head>`) instead of building a DOM of the whole page;
 - supports outbound HTTP(S) proxies in the standalone server, with the private IP block still in effect.
 
-Requires Node.js 26.4.0 or later. ESM only.
+Requires Node.js `^22.22.2 || ^24.17.0 || >=26.4.0`. ESM only.
 
 ## Contents
 
@@ -188,14 +188,20 @@ timeouts, the size options, `allowedPrivateNetworks`, `proxy`, and the identity 
 (a different agent object counts as a different request). `cache`, `coordinator`, `cacheTtl` and `errorCacheTtl` are
 not part of the key.
 
-- Every caller gets its own `structuredClone` of the result. Failures are cached too and rethrown as a new `Error`
-  (or `StatusError`, carrying `statusCode` and `statusMessage`) with the original `name` and `message`; the stack is
-  not kept.
+- Every caller gets its own `structuredClone` of the result, always (with or without a cache). A result that cannot
+  be cloned (e.g. a plugin returning a function) therefore becomes an error, and that error is what gets cached.
+- Failures are cached too and rethrown as a new `Error` (or `StatusError`, carrying `statusCode` and `statusMessage`)
+  with the original `name` and `message`; the stack is not kept, and the message is cut to 1024 characters.
 - Keys passed to `SummaryCache` and `InflightCoordinator` are SHA-256 hex digests, so proxy credentials never appear
   in them.
+- The identity of `agent` and `plugins` objects in a key is per process (it includes a random value chosen when the
+  process starts). A cache shared between processes (e.g. Redis) therefore only shares results of calls without
+  `agent` or `plugins` across processes; calls with them are shared within one process.
 - When concurrent calls share one in-flight request but were given different `cache`, `cacheTtl` or `errorCacheTtl`,
   the first call's settings are used for storing the result; the later calls just receive it.
-- The default `MemorySummaryCache` holds up to 1000 entries and drops the oldest stored ones first.
+- The default `MemorySummaryCache` holds up to 1000 entries and up to 64 MiB (estimated as 2 bytes per character of
+  each entry's JSON form), and drops the oldest stored ones first. An entry estimated above 256 KiB is not stored; the
+  caller still gets the result. `new MemorySummaryCache({ maxEntries, maxBytes, maxEntryBytes })` changes these.
 
 For independent caches (e.g. per configuration), use `createSummaly`:
 
@@ -305,7 +311,8 @@ with the server administrator in control:
 - `lang`, `userAgent`, `followRedirects`: used unless the matching environment variable is set (the variable wins).
 - `responseTimeout`, `operationTimeout`, `contentLengthLimit`: **can only tighten.** The upper bound is the
   environment variable if set, otherwise the default (`20000` ms, `60000` ms, `10485760` bytes). A query value is used
-  only when it is above 0 and not above that bound; otherwise the bound applies. So if Misskey is configured with a
+  only when it is above 0 and not above that bound; otherwise the bound applies. A timeout variable set to `0` (no
+  timeout) has no bound, so any timeout above 0 from the query is used. So if Misskey is configured with a
   larger limit than the server allows (for example a 20 MiB `urlPreviewMaximumContentLength`), the server's limit wins;
   raise `SUMMALY_CONTENT_LENGTH_LIMIT` / `SUMMALY_OPERATION_TIMEOUT` to allow more.
 - `contentLengthRequired`: `true` turns the check on; the query cannot turn it off.
@@ -318,7 +325,8 @@ docker run --rm -p 127.0.0.1:3000:3000 ghcr.io/tiramiss-community/chiramiss:late
 curl 'http://127.0.0.1:3000/?url=https://example.com/'
 ```
 
-The image runs as the non-root `node` user, listens on `0.0.0.0:3000`, and has a `HEALTHCHECK` on `/healthz`.
+The image runs as the non-root `node` user, listens on `0.0.0.0:3000`, and has a `HEALTHCHECK` on `/healthz` (on
+`SUMMALY_PORT` when you change it).
 Configure it with the [environment variables](#environment-variables) above.
 
 Tags: `X.Y.Z`, `X.Y`, `X` (from 1.0.0 on) and `latest`. The image version matches the library version.
@@ -339,7 +347,8 @@ services:
       HTTPS_PROXY: "http://proxy.example:3128"
 ```
 
-For Kubernetes, use `/healthz` for the probes; the container is stateless and shuts down gracefully on SIGTERM.
+For Kubernetes, use `/healthz` for the probes; the container is stateless and shuts down gracefully on SIGTERM
+(requests in progress are answered first).
 
 To build the image yourself: `docker build -t chiramiss .`
 
