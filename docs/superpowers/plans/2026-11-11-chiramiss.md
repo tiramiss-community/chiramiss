@@ -180,7 +180,7 @@ test('index から version が export されている', async () => {
   - `isAddressAllowed(guard: AddressGuard, ip: string): boolean`（IPv4-mapped IPv6 は IPv4 に直してから判定する。`range() === 'unicast'` か、例外ネットワークに含まれれば true）
   - `assertHostAllowed(guard: AddressGuard, hostname: string): Promise<void>`（IP リテラルはそのまま判定する。ホスト名なら `dns.lookup(..., { all: true })` で全アドレスを判定する。1つでも不可なら `new StatusError(\`Private IP rejected ${ip}\`, 400, 'Private IP Rejected')`）
   - `createGuardedLookup(guard: AddressGuard): net.LookupFunction`（ソケット接続時の名前解決にも同じ判定をかける。DNS rebinding 対策）
-  - `isGuardDisabled(agent: SummalyOptions['agent'], env = process.env): boolean`（本家互換: `env.SUMMALY_ALLOW_PRIVATE_IP === 'true'` か、`agent` に1つ以上キーがあれば true。空オブジェクトなら false）
+  - `isGuardDisabled(agent: SummalyOptions['agent'], env = process.env): boolean`（本家互換: `env.SUMMALY_ALLOW_PRIVATE_IP === 'true'` か、`agent` に実際の agent が1つ以上あれば true（`{ http: undefined }` は false、Ruling R9）。空オブジェクトなら false）
 
 - [ ] **Step 1: 失敗するテストを書く**
 
