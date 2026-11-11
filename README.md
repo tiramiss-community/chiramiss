@@ -141,14 +141,21 @@ Behavior that intentionally differs from summaly v5.5.2:
   Upstream ran chardet on the whole body first, which was the most expensive step of a summary.
   A page whose header or meta declares the wrong charset is now decoded as declared.
 - **oEmbed and favicon requests** use the same User-Agent, timeouts and size limit as the page request.
-- **Connections are reused within one summary.** The requests one summary sends to the same site (the HEAD that
-  follows redirects, the page, the favicon, oEmbed) share a keep-alive connection, and every connection is closed when
-  the summary ends; separate summaries never share one. This applies to chiramiss's own connections, not to a
-  caller-supplied `agent` or to proxied requests. With the private IP block turned off (`CHIRAMISS_ALLOW_PRIVATE_IP=true`
-  or `SUMMALY_ALLOW_PRIVATE_IP=true`), requests go through Node's global agent, whose connections may outlive the
-  summary and be shared with other summaries. As with any keep-alive client, a server that wrongly sends a body with a
-  HEAD response can make the next request on that connection read those bytes as part of its response; when they
-  break the response, the request is sent again on a new connection.
+- **Connections are reused for a short time.** The requests one summary sends to the same site (the HEAD that
+  follows redirects, the page, the favicon, oEmbed) share a keep-alive connection, and a connection that finished its
+  response stays open for up to 4 seconds of idle time, so the next summary of that site made by the same summarizer
+  with the same `allowedPrivateNetworks` reuses it instead of opening a new one (upstream reuses connections too, through
+  Node's global agent). Each summarizer (`createSummarizer`, and the one behind `summarize`) keeps its own connections:
+  separate summarizers, and summaries with different `allowedPrivateNetworks`, never share one, and every connection is
+  checked against the private IP block of its setting when it opens. At most 4 idle connections are kept per site,
+  idle connections never keep the process from exiting, and a request that fails or times out never leaves its
+  connection for reuse. This applies to chiramiss's own connections, not to a caller-supplied `agent` or to proxied
+  requests (a proxied connection is closed when its summary ends). With the private IP block turned off
+  (`CHIRAMISS_ALLOW_PRIVATE_IP=true` or `SUMMALY_ALLOW_PRIVATE_IP=true`), requests go through Node's global agent, as
+  upstream does. As with any keep-alive client, a server that wrongly sends a body with a HEAD response can make the
+  next request on that connection read those bytes as part of its response, and that request may now belong to a later
+  summary. Only responses from the same host and port (in the same summarizer and setting) can be mixed up this way;
+  when the bytes break the response, the request is sent again on a new connection.
 - **Amazon** pages are fetched with `followRedirects: true` and `contentLengthRequired: false`, like upstream's
   Amazon plugin, whatever the caller set; the other settings (agent, User-Agent, timeouts, size limit) apply.
 - **Custom plugins** receive the options as the caller gave them, like upstream: keys that were not set stay
