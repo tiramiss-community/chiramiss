@@ -6,7 +6,7 @@
 
 **Architecture:** lib は責務ごとに層を分ける。層は「HTTP 取得（`http/`）」「`<head>` 中心のパース（`html/`）」「項目の抽出（`extract/`）」「サイト固有のプロバイダ（`providers/`）」「一本化とキャッシュ（`coalesce/`）」の5つで、入口の `summaly()` はこれらを組み合わせるだけにする。設定はすべて呼び出しごとのコンテキストで運び、モジュールのグローバル状態を持たない。サーバは lib に依存する薄い Fastify アプリで、設定は環境変数で受け取る。
 
-**Tech Stack:** Node.js 26、TypeScript 7、pnpm 12 workspace、tsdown、vitest、oxlint、htmlparser2（`<head>` パースと oEmbed の iframe 検証）、cheerio（全文 DOM が要るプロバイダ専用）、ipaddr.js、chardet、hpagent（プロキシ）、fastify（サーバとテスト）、changesets、GitHub Actions、Docker buildx
+**Tech Stack:** Node.js 26、TypeScript 7、pnpm 12 workspace、tsdown、vitest、oxlint、htmlparser2（`<head>` パースと oEmbed の iframe 検証）、cheerio（全文 DOM が要るプロバイダ専用）、ipaddr.js、chardet、自前の CONNECT トンネル agent（プロキシ。Ruling R25 で hpagent から置き換え）、fastify（サーバとテスト）、changesets、GitHub Actions、Docker buildx
 
 **Spec:** `docs/superpowers/specs/2026-11-11-chiramiss-design.md`。実行者は spec と本計画の両方を読むこと。本家のソースとテストは `~/develop/summaly`（HEAD `25e3636`）を参照する。
 
@@ -382,7 +382,7 @@ test('カスタムプラグインは組み込みより後に評価され、Gener
 - Consumes: Task 2 の `assertHostAllowed`。Task 3 の `Transport`
 - Produces:
   - `selectProxyUrl(target: URL, proxy: ProxyOptions): string | null`。`noProxy` はカンマ区切りで、`*`、ホスト名の完全一致、先頭 `.` 付きまたは無しのドメイン接尾辞一致、`host:port` に対応する
-  - `createProxyAgents(proxy: ProxyOptions): { http?: http.Agent; https?: https.Agent }`（`hpagent` の `HttpProxyAgent` / `HttpsProxyAgent` を使う。本体の HttpRequestService と同じライブラリ）
+  - `createProxyAgents(proxy: ProxyOptions): { http?: http.Agent; https?: https.Agent }`（自前の CONNECT トンネル agent。CONNECT 先はローカルで検証した IP（IPv4 優先、失敗時は次の候補）で、Host と TLS SNI は元のホスト名。Ruling R25 / R28。当初は hpagent の予定だったが、プロキシ側の再解決を防げないため置き換えた）
   - `createTransport` を拡張する。agent が未指定で proxy があればプロキシ用 agent を作り、guard は残す。`fetchResponse` は `selectProxyUrl` が null のホストには直接接続する
   - プロキシ経由のときも、各ホップの前に `assertHostAllowed` で宛先を検証してからプロキシへ要求を送る。プロキシ経由では `createGuardedLookup` はプロキシ自身の名前解決にしか効かないので、宛先の検証は `assertHostAllowed` が担う
 
@@ -406,7 +406,7 @@ test('agent を渡した場合はプロキシ設定を無視する');
 ```
 
 - [ ] **Step 2: 実行して失敗を確認する**
-- [ ] **Step 3: 実装する**（依存に `hpagent` を追加する）
+- [ ] **Step 3: 実装する**（hpagent は使わない。Ruling R25）
 - [ ] **Step 4: 実行して成功を確認する**
 - [ ] **Step 5: Commit** — `feat: 外向きプロキシに対応（宛先の遮断は維持）`
 
