@@ -4,13 +4,13 @@ import { buildRequestKey } from '@/coalesce/key.js';
 import { MemorySummaryCache } from '@/coalesce/memory-cache.js';
 import { type CoalesceDeps, runCoalesced } from '@/coalesce/run.js';
 import { type ScrapeContext, createScrapeContext, fetchWithContext, fixOptions } from '@/context.js';
-import { scrapeGeneral } from '@/extract/general.js';
+import { pageRequest, scrapeGeneral, summarizePage, toPage } from '@/extract/general.js';
 import { privateIpAllowedByEnv } from '@/http/address-guard.js';
 import { GuardedAgentPool } from '@/http/agent-pool.js';
 import { DEFAULT_CACHE_TTL, DEFAULT_ERROR_CACHE_TTL } from '@/options.js';
 import { builtinProviders } from '@/providers/index.js';
-import { fromPlugin } from '@/providers/provider.js';
-import type { SummarizeOptions, SummaryResult } from '@/types.js';
+import { type Provider, fromPlugin } from '@/providers/provider.js';
+import type { Summary, SummarizeOptions, SummaryResult } from '@/types.js';
 import { VERSION } from '@/version.js';
 
 export const version: string = VERSION;
@@ -126,13 +126,11 @@ async function summarizeUncached(
 	// The requests of this call share the transport's connections. Guarded connections that completed their responses
 	// stay idle in the summarizer's pool for later calls; proxy connections end with the call (see Transport#close).
 	try {
-		const actualUrl = opts.followRedirects ? await resolveFinalUrl(ctx, url) : url;
-		const target = new URL(actualUrl);
-
 		const providers = [...builtinProviders, ...(opts.plugins ?? []).map(fromPlugin)];
-		const match = providers.find(provider => provider.test(target));
-
-		const summary = match ? await match.summarize(ctx, target) : await scrapeGeneral(ctx, target);
+		const requested = new URL(url);
+		const { summary, url: actualUrl } = opts.followRedirects && !providers.some(provider => provider.test(requested))
+			? await summarizeGetFirst(ctx, url, providers)
+			: await summarizeAfterHead(ctx, url, providers, opts.followRedirects ?? false);
 
 		if (summary == null) {
 			throw new Error('failed summarize');
@@ -144,6 +142,58 @@ async function summarizeUncached(
 	} finally {
 		ctx.transport.close();
 	}
+}
+
+/** A summary and the URL reported as its `url`. */
+type Summarized = { summary: Summary | null; url: string };
+
+/**
+ * For a URL that no provider takes: GETs the page following redirects and picks the provider by the final URL once the
+ * response headers arrive, so the page is fetched once (upstream sends a HEAD for the final URL, then GETs the page).
+ * - No provider takes the final URL either: that response is summarized as the page.
+ * - A provider that reads the page (`fromPage`) gets that response.
+ * - Any other provider gets the final URL, whatever the response's status, and the body is dropped unread (see
+ *   FetchRequest.onFinalUrl): it fetches what it needs itself, as it does after upstream's HEAD.
+ * A failed GET otherwise fails the summary: upstream falls back to the requested URL, which no provider takes, and GETs
+ * it again.
+ */
+async function summarizeGetFirst(ctx: ScrapeContext, url: string, providers: Provider[]): Promise<Summarized> {
+	const found: { provider?: Provider } = {};
+	const res = await fetchWithContext(ctx, {
+		...pageRequest(ctx, url),
+		onFinalUrl: finalUrl => {
+			found.provider = providers.find(provider => provider.test(finalUrl));
+			if (!found.provider) {
+				return undefined;
+			}
+
+			return found.provider.fromPage ? found.provider.fromPage.checks : 'drop';
+		},
+	});
+	const finalUrl = new URL(res.url);
+	const { provider } = found;
+
+	if (provider?.fromPage) {
+		return { summary: await provider.fromPage.summarize(ctx, finalUrl, toPage(res)), url: res.url };
+	}
+	if (provider) {
+		return { summary: await provider.summarize(ctx, finalUrl), url: res.url };
+	}
+
+	// The final URL is the base for relative links, as it is when upstream GETs the URL its HEAD ended on.
+	return { summary: await summarizePage(ctx, finalUrl, toPage(res)), url: res.url };
+}
+
+/**
+ * For a URL that a provider takes (or with followRedirects off), as upstream does: the final URL from a HEAD picks the
+ * provider, so a provider that reads an API instead of the page never has the page fetched.
+ */
+async function summarizeAfterHead(ctx: ScrapeContext, url: string, providers: Provider[], followRedirects: boolean): Promise<Summarized> {
+	const actualUrl = followRedirects ? await resolveFinalUrl(ctx, url) : url;
+	const target = new URL(actualUrl);
+	const match = providers.find(provider => provider.test(target));
+
+	return { summary: match ? await match.summarize(ctx, target) : await scrapeGeneral(ctx, target), url: actualUrl };
 }
 
 /**

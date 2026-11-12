@@ -71,7 +71,7 @@ export function createScrapeContext(
 	};
 }
 
-type ContextRequest = Pick<FetchRequest, 'url' | 'method' | 'headers'> & Partial<FetchRequest>;
+export type ContextRequest = Pick<FetchRequest, 'url' | 'method' | 'headers'> & Partial<FetchRequest>;
 
 /**
  * Sends a request through the context's transport with its User-Agent, timeouts and size limits.

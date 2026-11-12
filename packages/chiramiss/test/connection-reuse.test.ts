@@ -11,7 +11,7 @@ import { LOOPBACK_CERT, LOOPBACK_KEY } from './helpers/tls-cert.js';
 
 const PAGE = '<!doctype html><html><head><title>page</title><link rel="icon" href="/favicon.ico"></head><body>body</body></html>';
 
-/** followRedirects is left at its default (true): HEAD for the final URL, GET for the page, HEAD for the favicon. */
+/** followRedirects is left at its default (true): GET for the page (following redirects), HEAD for the favicon. */
 const summarize = createSummarizer({ cache: false, coordinator: false, allowedPrivateNetworks: ['127.0.0.0/8'] });
 
 type Origin = {
@@ -145,13 +145,13 @@ async function startConnectProxy(): Promise<{ url: string; tunnels: () => number
 }
 
 describe.each(['http', 'https'] as const)('1回の要約の中で接続を再利用する (%s)', scheme => {
-	test('HEAD・GET・favicon の HEAD を同じ接続で送る', async () => {
+	test('ページの GET と favicon の HEAD を同じ接続で送る', async () => {
 		const origin = await startOrigin(scheme);
 		const summary = await summarize(origin.url);
 
 		expect(summary.title).toBe('page');
 		expect(summary.icon).toBe(new URL('/favicon.ico', origin.url).href);
-		expect(origin.requestsBySocket()).toEqual([['HEAD /', 'GET /', 'HEAD /favicon.ico']]);
+		expect(origin.requestsBySocket()).toEqual([['GET /', 'HEAD /favicon.ico']]);
 		expect(origin.connections()).toBe(1);
 	});
 
@@ -202,8 +202,8 @@ describe.each(['http', 'https'] as const)('要約をまたいで接続を再利�
 		expect((await summarize(new URL('/b', origin.url).href)).title).toBe('page');
 		expect(origin.connections()).toBe(1);
 		expect(origin.requestsBySocket()).toEqual([[
-			'HEAD /a', 'GET /a', 'HEAD /favicon.ico',
-			'HEAD /b', 'GET /b', 'HEAD /favicon.ico',
+			'GET /a', 'HEAD /favicon.ico',
+			'GET /b', 'HEAD /favicon.ico',
 		]]);
 	});
 
@@ -281,11 +281,10 @@ describe.each(['http', 'https'] as const)('要約をまたいで接続を再利�
 
 		expect(summary.title).toBe('page');
 		expect(summary.icon).toBe(new URL('/favicon.ico', origin.url).href);
-		// The HEAD for the final URL went out again on a new connection (without the retry it would be lost,
-		// and the summary would fall back to the URL as given).
+		// The page GET went out again on a new connection (without the retry the summary would fail).
 		expect(origin.requestsBySocket()).toEqual([
-			['HEAD /a', 'GET /a', 'HEAD /favicon.ico', 'HEAD /b'],
-			['HEAD /b', 'GET /b', 'HEAD /favicon.ico'],
+			['GET /a', 'HEAD /favicon.ico', 'GET /b'],
+			['GET /b', 'HEAD /favicon.ico'],
 		]);
 	});
 });
@@ -303,7 +302,7 @@ describe('要約をまたいだ接続の再利用の対象外', () => {
 			const other = createSummarizer({ cache: false, coordinator: false });
 
 			expect((await other(origin.url)).title).toBe('page');
-			expect(addRequest).toHaveBeenCalledTimes(3);
+			expect(addRequest).toHaveBeenCalledTimes(2);
 		} finally {
 			delete process.env.CHIRAMISS_ALLOW_PRIVATE_IP;
 			addRequest.mockRestore();
@@ -319,7 +318,7 @@ describe('要約をまたいだ接続の再利用の対象外', () => {
 		try {
 			await summarize(new URL('/a', origin.url).href, { agent: { http: agent } });
 			await summarize(new URL('/b', origin.url).href, { agent: { http: agent } });
-			expect(addRequest).toHaveBeenCalledTimes(6);
+			expect(addRequest).toHaveBeenCalledTimes(4);
 			expect(destroy).not.toHaveBeenCalled();
 			// Only the caller's agent connected; its own keep-alive decides reuse.
 			expect(origin.connections()).toBe(1);
@@ -400,7 +399,7 @@ test('接続を再利用しても、許可していないプライベート IP �
 	const summary = await summarize(origin.url, { allowedPrivateNetworks: ['127.0.0.2/32'] });
 
 	expect(summary.title).toBe('page');
-	expect(origin.requestsBySocket()).toEqual([['HEAD /', 'GET /']]);
+	expect(origin.requestsBySocket()).toEqual([['GET /']]);
 	expect(targetHits).toBe(0);
 });
 
@@ -519,12 +518,14 @@ async function startStrayOrigin(stray: (method: string, path: string) => string 
 
 describe('再利用したソケットに前の応答の余りが届いたら、新しい接続で送り直す', () => {
 	test('HEAD の応答のあとに本文（チャンクの終端）が届く', async () => {
-		const origin = await startStrayOrigin((method, path) => (method === 'HEAD' && path === '/' ? '0\r\n\r\n' : undefined));
-		const summary = await summarize(origin.url);
+		const origin = await startStrayOrigin((method, path) => (method === 'HEAD' && path === '/favicon.ico' ? '0\r\n\r\n' : undefined));
+
+		await summarize(new URL('/a', origin.url).href);
+		const summary = await summarize(new URL('/b', origin.url).href);
 
 		expect(summary.title).toBe('page');
 		expect(summary.icon).toBe(new URL('/favicon.ico', origin.url).href);
-		// The page GET failed on the reused socket and went out again on a new connection.
+		// The next summary's page GET failed on the socket the favicon HEAD left and went out again on a new connection.
 		expect(origin.connections()).toBe(2);
 	});
 
@@ -556,14 +557,23 @@ function redirecting(
 
 describe.each(['http', 'https'] as const)('リダイレクトの応答を受けた接続を再利用する (%s)', scheme => {
 	test('HEAD へのリダイレクトの後も、同じ接続で続ける', async () => {
-		const origin = await startOrigin(scheme, '127.0.0.1', redirecting((res) => {
-			res.writeHead(302, { location: '/', 'content-length': '0' });
-			res.end();
-		}));
-		const summary = await summarize(new URL('/old', origin.url).href);
+		const page = PAGE.replace('href="/favicon.ico"', 'href="/old"');
+		const origin = await startOrigin(scheme, '127.0.0.1', (req, res) => {
+			if (req.url === '/') {
+				res.writeHead(200, { 'content-type': 'text/html', 'content-length': String(Buffer.byteLength(page)) });
+				res.end(page);
+			} else if (req.url === '/old') {
+				res.writeHead(302, { location: '/favicon.ico', 'content-length': '0' });
+				res.end();
+			} else {
+				serveDefault(req, res);
+			}
+		});
+		const summary = await summarize(origin.url);
 
 		expect(summary.title).toBe('page');
-		expect(origin.requestsBySocket()).toEqual([['HEAD /old', 'HEAD /', 'GET /', 'HEAD /favicon.ico']]);
+		// The favicon check is a HEAD; its redirect leaves the connection for the next hop.
+		expect(origin.requestsBySocket()).toEqual([['GET /', 'HEAD /old', 'HEAD /favicon.ico']]);
 	});
 
 	test('GET へのリダイレクトに短い本文があっても、読み切って同じ接続で続ける', async () => {
@@ -574,7 +584,7 @@ describe.each(['http', 'https'] as const)('リダイレクトの応答を受け�
 		const summary = await summarize(new URL('/old', origin.url).href);
 
 		expect(summary.title).toBe('page');
-		expect(origin.requestsBySocket()).toEqual([['HEAD /old', 'GET /old', 'GET /', 'HEAD /favicon.ico']]);
+		expect(origin.requestsBySocket()).toEqual([['GET /old', 'GET /', 'HEAD /favicon.ico']]);
 	});
 
 	test('GET へのリダイレクトの本文がチャンク形式でも、短ければ読み切って同じ接続で続ける', async () => {

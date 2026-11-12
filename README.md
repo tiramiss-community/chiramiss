@@ -48,8 +48,9 @@ ChiramissBot/<version> (+https://github.com/tiramiss-community/chiramiss#readme)
 that uses chiramiss) posts a URL, the server fetches that page once to build the preview card shown with the post
 (title, description, thumbnail). Besides the page itself it may fetch what the page names for the preview (its
 oEmbed endpoint and favicon) and follow its redirects. For a few sites (Wikipedia, NVD, npm) it reads their public API
-instead of the page's HTML (the page URL still gets a HEAD to follow its redirects). It does not crawl and does not
-follow other links. chiramiss keeps the summary only in a short-lived cache.
+instead of the page's HTML: a posted URL of such a site gets only a HEAD to follow its redirects, and when a URL of
+another site redirects there, the GET that followed the redirects stops reading the page once the redirects land on
+it. It does not crawl and does not follow other links. chiramiss keeps the summary only in a short-lived cache.
 
 **When it accesses your site.** Only when a URL of your site has been posted and its preview is needed. Concurrent
 requests for the same URL are merged into one and the result is cached for a few minutes, so a post that spreads
@@ -146,8 +147,19 @@ Behavior that intentionally differs from summaly v5.5.2:
   Upstream ran chardet on the whole body first, which was the most expensive step of a summary.
   A page whose header or meta declares the wrong charset is now decoded as declared.
 - **oEmbed and favicon requests** use the same User-Agent, timeouts and size limit as the page request.
-- **Connections are reused for a short time.** The requests one summary sends to the same site (the HEAD that
-  follows redirects, the page, the favicon, oEmbed) share a keep-alive connection, redirect hops included: a redirect
+- **The page is fetched once.** Upstream sends a HEAD that follows the redirects to find the final URL, then GETs that
+  URL. chiramiss GETs the posted URL, follows its redirects and summarizes that response, unless a provider (built in
+  or a plugin) takes the posted URL itself, in which case it sends the HEAD first as upstream does. When the redirects
+  of the GET end on a URL a provider takes:
+  - a provider that reads the page (Amazon, Bluesky) summarizes that response, so the page is not fetched again;
+  - any other provider gets that URL whatever the response's status, and the page is not read (a short body is read
+    to its end so that its connection is reused, a longer one is cut), without the type and size checks of the page.
+
+  Because of this, a failed page GET fails the summary at once (upstream falls back to the posted URL and GETs it
+  again), and the result's `url` and the base for relative links are where the GET ended, also for a site that
+  answers a HEAD with an error (upstream then uses the posted URL) or redirects a HEAD elsewhere than a GET.
+- **Connections are reused for a short time.** The requests one summary sends to the same site (the page and its
+  redirects, the favicon, oEmbed) share a keep-alive connection, redirect hops included: a redirect
   response without a body or with a short one (up to 16 KB, arriving within 0.5 seconds) is read to its end so that its
   connection serves the next hop, while a longer body is not read and its connection is closed. A connection that
   finished its response stays open for up to 4 seconds of idle time, so the next summary of that site made by the same summarizer
