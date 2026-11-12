@@ -428,11 +428,11 @@ test('127.0.0.2 を許可した要約が接続を残していても、許可し�
 
 /**
  * An IP literal is refused by the check before each hop, before any agent is picked, so the test above passes even if
- * every setting shared one agent. Here the target is a name (DNS rebinding): the check before each hop of the later
- * summaries sees a public address and passes, so only keeping their agents apart stops them from reusing the socket
- * to 127.0.0.2 that the first summary left in the pool.
+ * every setting shared one agent. Here the target is a name: a direct hop to a name is not checked before the hop
+ * (the connect-time check covers every new socket), so only keeping the agents of the later summaries apart stops them
+ * from reusing the socket to 127.0.0.2 that the first summary left in the pool.
  */
-test('127.0.0.2 を許可した要約の接続は、名前が公開アドレスに解決されるようになっても、許可していない要約には使わせない', async ({ skip }) => {
+test('127.0.0.2 を許可した要約の接続は、名前で取得しても、許可していない要約には使わせない', async ({ skip }) => {
 	const origin = await startOrigin('http', '127.0.0.2').catch((e: NodeJS.ErrnoException) => {
 		if (e.code === 'EADDRNOTAVAIL') {
 			skip('cannot bind 127.0.0.2 on this host (e.g. macOS has no 127.0.0.0/8 loopback aliases); covered on Linux CI');
@@ -440,9 +440,6 @@ test('127.0.0.2 を許可した要約の接続は、名前が公開アドレス�
 		throw e;
 	});
 	const host = 'rebind.test';
-	let checkedAddress = '127.0.0.2';
-	// The check before each hop (dns.promises.lookup) and the check at connect time (dns.lookup) resolve the name apart.
-	const precheck = vi.spyOn(dns.promises, 'lookup').mockImplementation((async () => [{ address: checkedAddress, family: 4 }]) as never);
 	const originalLookup = dns.lookup;
 	const connectLookup = vi.spyOn(dns, 'lookup').mockImplementation(((hostname: string, options: unknown, callback: (...args: unknown[]) => void) => {
 		if (hostname !== host) {
@@ -465,7 +462,6 @@ test('127.0.0.2 を許可した要約の接続は、名前が公開アドレス�
 		expect(await origin.open()).toBe(1);
 		const requests = origin.requestsBySocket().flat().length;
 
-		checkedAddress = '93.184.216.34';
 		await expect(other(new URL('/b', url).href, { allowedPrivateNetworks: ['127.0.0.1/32'] }))
 			.rejects.toThrow('Private IP rejected 127.0.0.2');
 		await expect(other(new URL('/c', url).href, { allowedPrivateNetworks: [] }))
@@ -473,7 +469,6 @@ test('127.0.0.2 を許可した要約の接続は、名前が公開アドレス�
 		expect(origin.requestsBySocket().flat()).toHaveLength(requests);
 		expect(origin.connections()).toBe(1);
 	} finally {
-		precheck.mockRestore();
 		connectLookup.mockRestore();
 	}
 });

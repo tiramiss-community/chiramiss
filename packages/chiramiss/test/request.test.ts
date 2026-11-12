@@ -439,8 +439,8 @@ describe('fetchResponse', () => {
 		expect(Date.now() - started).toBeLessThan(2000);
 	});
 
-	test('名前解決の事前確認も operationTimeout に含まれる', async () => {
-		vi.spyOn(dns.promises, 'lookup').mockImplementation(() => new Promise(() => {}));
+	test('接続時の名前解決も operationTimeout に含まれる', async () => {
+		vi.spyOn(dns, 'lookup').mockImplementation((() => {}) as never);
 		await expect(fetchResponse(createTransport({}, {}), request('http://example.invalid/', { operationTimeout: 100 })))
 			.rejects.toThrow("Timeout awaiting 'request' for 100ms");
 	});
@@ -455,15 +455,14 @@ describe('fetchResponse', () => {
 		expect(result.body.toString()).toBe('ok');
 	});
 
-	test('事前確認の後に名前解決の結果が変わっても、接続時の名前解決で拒否する (DNS rebinding)', async () => {
+	// A direct hop to a name has no check before it: this is its only check, and it relies on net.connect calling the
+	// agent's `lookup` for every host that is not an IP literal. Keep it, to catch a Node change that would break that.
+	test('ホスト名の宛先がプライベート IP に解決されたら、接続時の名前解決で拒否し、何も送らない', async () => {
 		let hits = 0;
 		const server = await serve((_req, res) => {
 			hits++;
 			res.end('secret');
 		});
-
-		// The pre-check sees a public address; the connect-time lookup then resolves localhost to loopback.
-		vi.spyOn(dns.promises, 'lookup').mockResolvedValue([{ address: '93.184.216.34', family: 4 }] as never);
 		const url = new URL(server.url);
 
 		url.hostname = 'localhost';
@@ -770,8 +769,15 @@ describe('transport 内の接続の再利用', () => {
 		transport.close();
 	});
 
-	test('プールにソケットがあっても、ホップごとの事前確認は省かない', async () => {
-		const { server, connections } = await countingServer(ok);
+	// What the guard promises is that no request reaches an address it refuses. A pooled socket goes to the address
+	// checked when it connected, so it may serve the name after the name moves; a new socket is checked against where
+	// the name points now.
+	test('名前の解決結果が許可していないネットワークに変わったら、新しい接続は拒否し、プールの接続は確認済みのアドレスにだけ送る', async () => {
+		let hits = 0;
+		const { server, connections } = await countingServer((req, res) => {
+			hits++;
+			ok(req, res);
+		});
 		const url = new URL(server.url);
 
 		url.hostname = 'localhost';
@@ -779,12 +785,39 @@ describe('transport 内の接続の再利用', () => {
 
 		await fetchResponse(transport, request(url.href));
 		expect(freeSocketCount(transport.guardedAgents?.http)).toBe(1);
-		// The name now resolves to a network that is not allowed: the pooled socket must not be used.
-		vi.spyOn(dns.promises, 'lookup').mockResolvedValue([{ address: '10.0.0.1', family: 4 }] as never);
-		const e = await fetchResponse(transport, request(url.href)).catch(e => e);
+		const moved = [{ address: '10.0.0.1', family: 4 }];
 
-		expect(e).toBeInstanceOf(StatusError);
-		expect(e.message).toBe('Private IP rejected 10.0.0.1');
+		vi.spyOn(dns.promises, 'lookup').mockResolvedValue(moved as never);
+		vi.spyOn(dns, 'lookup').mockImplementation(((_host: string, _options: unknown, callback: (err: null, addresses: typeof moved) => void) =>
+			process.nextTick(() => callback(null, moved))) as never);
+		// One takes the pooled socket; the other needs a new one, whose connect-time check refuses the new address.
+		const results = await Promise.allSettled([fetchResponse(transport, request(url.href)), fetchResponse(transport, request(url.href))]);
+		const rejected = results.filter(r => r.status === 'rejected').map(r => r.reason as Error);
+
+		expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+		expect(rejected).toHaveLength(1);
+		expect(rejected[0]).toBeInstanceOf(StatusError);
+		expect(rejected[0]?.message).toBe('Private IP rejected 10.0.0.1');
+		expect(hits).toBe(2);
+		expect(connections()).toBe(1);
+		transport.close();
+	});
+
+	// Every socket of the guarded agents is checked when it connects, so a direct hop to a name needs no lookup of its own
+	// (Node does not cache DNS: it would be one more query on every hop).
+	test('直接つなぐホスト名の hop では、接続時の確認に任せて事前の名前解決をしない', async () => {
+		const { server, connections } = await countingServer(ok);
+		const url = new URL(server.url);
+
+		url.hostname = 'localhost';
+		const precheck = vi.spyOn(dns.promises, 'lookup');
+		const connectLookup = vi.spyOn(dns, 'lookup');
+		const transport = createTransport({ allowedPrivateNetworks: ['127.0.0.0/8', '::1/128'] }, {});
+
+		await fetchResponse(transport, request(url.href, { method: 'HEAD' }));
+		await fetchResponse(transport, request(url.href));
+		expect(precheck).not.toHaveBeenCalled();
+		expect(connectLookup).toHaveBeenCalledTimes(1);
 		expect(connections()).toBe(1);
 		transport.close();
 	});
