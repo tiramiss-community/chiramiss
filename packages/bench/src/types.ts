@@ -1,8 +1,20 @@
-export type PageKind = 'article' | 'large' | 'sjis' | 'oembed' | 'redirect';
+// article-unique-icon は article と同じページで、favicon の URL だけをページごとに変えた物（favicon 確認のキャッシュが当たらない）。
+export type PageKind = 'article' | 'article-unique-icon' | 'large' | 'sjis' | 'oembed' | 'redirect';
 export type TargetName = 'chiramiss' | 'summaly';
 export type ScenarioId = 's1' | 's2' | 's3a' | 's3b';
 
-export interface Expectation { title: string; playerUrl?: string }
+/** 成功とみなす応答の中身。loadgen はこれと要約させた URL から期待値を作って比べる。 */
+export interface Expectation {
+	title: string;
+	description: string;
+	/** `{search}` は要約させた URL のクエリ（`?` 込み）に置き換えて比べる。 */
+	icon: string;
+	thumbnail: string;
+	sitename: string;
+	playerUrl?: string;
+	/** origin がリダイレクトする先のパス。応答の `url` は、要約させた URL のパスをこれに替えた物と比べる。 */
+	finalPath?: string;
+}
 
 export interface OriginStats {
 	requests: Record<string, number>; // key: `${method} ${pathname}` 例: 'GET /article', 'HEAD /favicon.ico'
@@ -47,7 +59,8 @@ export interface RunRecord {
 	spec: RunSpec;
 	load: LoadResult;
 	cpuUsageUsec: number; // 計測区間の差分
-	memoryPeakBytes: number;
+	memoryPeakBeforeRunBytes: number; // 計測区間の開始時点の memory.peak（起動と暖機を含む）
+	memoryPeakBytes: number; // 計測区間の終了時点の memory.peak（コンテナの起動から）。開始時点より大きければ計測区間のピーク
 }
 
 export interface BenchMeta {

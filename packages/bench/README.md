@@ -6,12 +6,12 @@ Compares chiramiss with upstream [summaly](https://github.com/misskey-dev/summal
 
 All summarized URLs live on a fake server (`https://origin.bench`) inside a private Docker network. **No third-party site is ever contacted.**
 
-- **S1: latency, one request at a time.** Five page kinds (article, large, Shift_JIS, oEmbed, redirect) at 0 ms and 50 ms added round-trip time. The headline number is the ratio of median latencies for an article page with no added latency, i.e. the cost of summarizing itself.
+- **S1: latency, one request at a time.** Five page kinds (article, large, Shift_JIS, oEmbed, redirect) at 0 ms and 50 ms added round-trip time. The headline number is the ratio of median latencies for an article page with no added latency, i.e. the cost of summarizing itself. Every page links the same `/favicon.ico`, so chiramiss answers its favicon check from its cache (filled during the warmup) while summaly sends `HEAD /favicon.ico` for every page; the headline says so. An extra row, "article, unique favicon URL", gives every page its own favicon URL so that the cache cannot answer, which shows how much of the gap the cache accounts for. The table also lists origin requests and new connections per summary for each target.
 - **S2: concurrent load.** Article pages at 10 / 50 / 100 concurrent requests with 50 ms RTT. Reports requests per second, p50, p99 and error rate.
 - **S3: same URL, many requests.** An oEmbed page requested 100 times. S3a sends all requests at once (in-flight sharing); S3b spreads them over time (in-flight sharing plus the result cache). Reports how many requests, bytes and new connections reached the origin.
-- **S4: resource use.** CPU time per summary and peak memory, taken from the container's cgroup for each run.
+- **S4: resource use.** CPU time per summary and peak memory, taken from the container's cgroup. CPU time covers only the measured requests. Memory comes from `memory.peak`, which counts from the container's start (startup and warmup included): when the measured requests raised it, the value is their own peak; when they did not, the report shows `≤ N`, an upper bound set by startup and warmup.
 
-A response only counts as successful when it is HTTP 200 and its `title` (and `player.url` for oEmbed) matches the fixture. Errors are counted and shown as warnings in the report. Runs where the origin saw fewer page fetches than successful responses (a sign that a cache answered) are flagged too.
+A response only counts as successful when it is HTTP 200 and its `title`, `description`, `icon`, `thumbnail`, `sitename` and `url` (the final URL after the redirect) all match the fixture, plus `player.url` for oEmbed. A target that skips work (for example returns `icon: null`) is not counted as fast. Errors are counted and shown as warnings in the report. Runs where the origin saw fewer page fetches than successful responses (a sign that a cache answered) are flagged too.
 
 ## Requirements
 
@@ -37,8 +37,8 @@ Results go to `packages/bench/results/<timestamp>-<sha>/` (`results.json` and `r
 
 Measured on an i7-14700K under WSL2:
 
-- `--quick`: about 143 seconds when the chiramiss image build is cached, about 159 seconds including a first build.
-- Default full run (3 repetitions): **estimated** at 35 to 45 minutes. This is not a measurement; it scales the per-run time of the quick run up to the full request counts. The first chiramiss build and the image pull add a few minutes. Expect it to differ on other machines.
+- `--quick`: about 168 seconds when the chiramiss image build is cached; a first build adds roughly 15 seconds.
+- Default full run (3 repetitions): **estimated** at 40 to 50 minutes. This is not a measurement; it scales the per-run time of the quick run up to the full request counts. The first chiramiss build and the image pull add a few minutes. Expect it to differ on other machines.
 
 ## Certificates
 
@@ -49,4 +49,4 @@ Measured on an i7-14700K under WSL2:
 1. Check out the release tag.
 2. Make sure the working tree is clean (the report warns when it is not).
 3. Run `pnpm bench` without `--quick`.
-4. Paste the headline and the tables from `report.md` into the main README, together with the environment section.
+4. Paste the whole of `report.md` into the main README: the headline, any warnings, the tables, the Notes and the Environment section. Do not drop the Notes or the warnings; they say what the numbers include (for example the favicon-check cache in S1).

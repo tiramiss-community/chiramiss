@@ -149,6 +149,7 @@ function loadSpecs(spec: RunSpec, target: TargetName): { warmup: LoadSpec; run: 
 			urls: warmupUrlsFor(spec, target),
 			// 暖機は計測と同じ同時実行数で行う。spread は 1 件ずつ流す。
 			arrival: { kind: 'closed', concurrency: spec.arrival.kind === 'closed' ? spec.arrival.concurrency : 1 },
+			// 暖機の結果は捨てるので、期待値は使われない。
 			expected: expectationFor('article'),
 		},
 		run: {
@@ -199,6 +200,8 @@ async function runOne(
 		spec,
 		load,
 		cpuUsageUsec: after.cpuUsageUsec - before.cpuUsageUsec,
+		// memory.peak はコンテナの起動からの値なので、計測区間のピークかどうかを report が判断できるよう両方残す。
+		memoryPeakBeforeRunBytes: before.memoryPeakBytes,
 		memoryPeakBytes: after.memoryPeakBytes,
 	};
 }

@@ -15,11 +15,11 @@ test('full plan matches the table', () => {
 	const s3a = of(plan, 's3a');
 	const s3b = of(plan, 's3b');
 
-	expect(s1).toHaveLength(5 * 2 * 3);
+	expect(s1).toHaveLength(6 * 2 * 3);
 	expect(s2).toHaveLength(3 * 3);
 	expect(s3a).toHaveLength(3);
 	expect(s3b).toHaveLength(3);
-	expect(plan).toHaveLength(30 + 9 + 3 + 3);
+	expect(plan).toHaveLength(36 + 9 + 3 + 3);
 
 	for (const s of s1) {
 		expect(s.requests).toBe(100);
@@ -29,7 +29,7 @@ test('full plan matches the table', () => {
 		expect(s.warmupRequests).toBe(30);
 	}
 
-	expect(new Set(s1.map((s) => s.pageKind))).toEqual(new Set(['article', 'large', 'sjis', 'oembed', 'redirect']));
+	expect(new Set(s1.map((s) => s.pageKind))).toEqual(new Set(['article', 'article-unique-icon', 'large', 'sjis', 'oembed', 'redirect']));
 	expect(s2.map((s) => s.arrival).filter((_, i) => i < 3)).toEqual([
 		{ kind: 'closed', concurrency: 10 },
 		{ kind: 'closed', concurrency: 50 },
@@ -68,7 +68,7 @@ test('quick plan matches the table', () => {
 });
 
 test('runs option controls the run count', () => {
-	expect(buildPlan({ runs: 5, quick: false })).toHaveLength(5 * 15);
+	expect(buildPlan({ runs: 5, quick: false })).toHaveLength(5 * 17);
 });
 
 test('urls are unique within and across runs and targets, except sameUrl runs', () => {

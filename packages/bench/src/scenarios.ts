@@ -1,7 +1,13 @@
-import { pagePath, PAGE_KINDS } from './fixtures.ts';
-import type { RunSpec, TargetName } from './types.ts';
+import { pagePath } from './fixtures.ts';
+import type { PageKind, RunSpec, TargetName } from './types.ts';
 
 export interface PlanOptions { runs: number; quick: boolean }
+
+/**
+ * S1 で測るページ。全種類に加え、favicon 確認のキャッシュが当たらない article（article-unique-icon）を
+ * article の隣に置き、キャッシュがどれだけ効いているかを数字で示す。
+ */
+export const S1_PAGE_KINDS: readonly PageKind[] = ['article', 'article-unique-icon', 'large', 'sjis', 'oembed', 'redirect'];
 
 const ORIGIN = 'https://origin.bench';
 
@@ -23,7 +29,7 @@ export function buildPlan(opts: PlanOptions): RunSpec[] {
 	const s3bDurationMs = quick ? 2000 : 10000;
 
 	for (let runIndex = 0; runIndex < runs; runIndex++) {
-		for (const pageKind of PAGE_KINDS) {
+		for (const pageKind of S1_PAGE_KINDS) {
 			for (const rttMs of [0, 50]) {
 				plan.push({
 					scenario: 's1',

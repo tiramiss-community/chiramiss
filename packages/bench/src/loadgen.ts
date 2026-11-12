@@ -1,6 +1,6 @@
 import { Agent, request } from 'node:http';
 import { setTimeout as sleep } from 'node:timers/promises';
-import type { LoadResult, LoadSpec, OriginStats } from './types.ts';
+import type { Expectation, LoadResult, LoadSpec, OriginStats } from './types.ts';
 
 const MAX_ERROR_SAMPLES = 5;
 const SAMPLE_BODY_LENGTH = 200;
@@ -35,14 +35,49 @@ async function control(spec: LoadSpec, method: string, path: string): Promise<Ht
 
 type Outcome = { ok: true; latencyMs: number } | { ok: false; sample: string };
 
-function validate(spec: LoadSpec, res: HttpResult): string | null {
+interface SummaryJson {
+	title?: unknown;
+	description?: unknown;
+	icon?: unknown;
+	thumbnail?: unknown;
+	sitename?: unknown;
+	url?: unknown;
+	player?: { url?: unknown } | null;
+}
+
+/** 要約させた URL に対して期待する応答のフィールド。仕事を省いた応答（icon が null など）を成功に数えないため、全部比べる。 */
+export function expectedFields(expected: Expectation, requestedUrl: string): Record<string, string> {
+	const requested = new URL(requestedUrl);
+	const finalUrl = new URL(requested);
+
+	if (expected.finalPath !== undefined) {
+		finalUrl.pathname = expected.finalPath;
+	}
+
+	const fields: Record<string, string> = {
+		title: expected.title,
+		description: expected.description,
+		icon: expected.icon.replaceAll('{search}', requested.search),
+		thumbnail: expected.thumbnail,
+		sitename: expected.sitename,
+		url: finalUrl.href,
+	};
+
+	if (expected.playerUrl !== undefined) {
+		fields['player.url'] = expected.playerUrl;
+	}
+
+	return fields;
+}
+
+function validate(spec: LoadSpec, requestedUrl: string, res: HttpResult): string | null {
 	const head = `${res.status} ${res.body.slice(0, SAMPLE_BODY_LENGTH)}`;
 
 	if (res.status !== 200) {
 		return head;
 	}
 
-	let json: { title?: unknown; player?: { url?: unknown } | null } | null;
+	let json: SummaryJson | null;
 
 	try {
 		json = JSON.parse(res.body) as typeof json;
@@ -50,12 +85,24 @@ function validate(spec: LoadSpec, res: HttpResult): string | null {
 		return head;
 	}
 
-	if (json === null || typeof json !== 'object' || json.title !== spec.expected.title) {
+	if (json === null || typeof json !== 'object') {
 		return head;
 	}
 
-	if (spec.expected.playerUrl !== undefined && json.player?.url !== spec.expected.playerUrl) {
-		return head;
+	const actual: Record<string, unknown> = {
+		title: json.title,
+		description: json.description,
+		icon: json.icon,
+		thumbnail: json.thumbnail,
+		sitename: json.sitename,
+		url: json.url,
+		'player.url': json.player?.url,
+	};
+
+	for (const [field, want] of Object.entries(expectedFields(spec.expected, requestedUrl))) {
+		if (actual[field] !== want) {
+			return `${res.status} ${field}: expected ${JSON.stringify(want)}, got ${JSON.stringify(actual[field])}`.slice(0, SAMPLE_BODY_LENGTH + 4);
+		}
 	}
 
 	return null;
@@ -68,7 +115,7 @@ async function summarizeOne(spec: LoadSpec, agent: Agent, url: string): Promise<
 	try {
 		const res = await httpCall(agent, 'GET', target, spec.requestTimeoutMs);
 		const latencyMs = performance.now() - startedAt;
-		const failure = validate(spec, res);
+		const failure = validate(spec, url, res);
 
 		return failure === null ? { ok: true, latencyMs } : { ok: false, sample: failure };
 	} catch (error) {

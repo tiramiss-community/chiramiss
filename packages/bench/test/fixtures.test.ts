@@ -11,7 +11,7 @@ describe('fixtures', () => {
 
 	test('bytes are deterministic', () => {
 		const other = buildFixtures();
-		const paths = [...PAGE_KINDS.map(pagePath), '/oembed.json', '/favicon.ico'];
+		const paths = [...PAGE_KINDS.map(pagePath), pagePath('article-unique-icon'), '/oembed.json', '/favicon.ico'];
 
 		for (const path of paths) {
 			const a = fixtures.respond('GET', new URL(path, origin));
@@ -45,8 +45,10 @@ describe('fixtures', () => {
 
 	test('sjis page is real Shift_JIS', () => {
 		const res = fixtures.respond('GET', new URL('/sjis', origin));
+		const html = new TextDecoder('shift_jis').decode(res.body);
 
-		expect(new TextDecoder('shift_jis').decode(res.body)).toContain(expectationFor('sjis').title);
+		expect(html).toContain(expectationFor('sjis').title);
+		expect(html).toContain(`<meta property="og:description" content="${expectationFor('sjis').description}">`);
 		expect(() => new TextDecoder('utf-8', { fatal: true }).decode(res.body)).toThrow();
 		expect(res.headers['content-type']).toBe('text/html');
 		expect(new TextDecoder('latin1').decode(res.body)).toContain('<meta charset="Shift_JIS">');
@@ -70,7 +72,35 @@ describe('fixtures', () => {
 
 		expect(res.status).toBe(302);
 		expect(res.headers['location']).toBe('/article?n=7');
-		expect(expectationFor('redirect')).toEqual(expectationFor('article'));
+		expect(expectationFor('redirect')).toEqual({ ...expectationFor('article'), finalPath: '/article' });
+	});
+
+	// loadgen はこれらのフィールドを全部比べるので、ページが期待値どおりの値を持っていなければならない。
+	test('every page carries the expected description, thumbnail, site name and favicon', () => {
+		for (const kind of PAGE_KINDS.filter((k) => k !== 'redirect')) {
+			const { body } = fixtures.respond('GET', new URL(pagePath(kind), origin));
+			const html = new TextDecoder(kind === 'sjis' ? 'shift_jis' : 'utf-8').decode(body);
+			const expected = expectationFor(kind);
+
+			expect(html).toContain(`<meta property="og:description" content="${expected.description}">`);
+			expect(html).toContain(`<meta property="og:image" content="${expected.thumbnail}">`);
+			expect(html).toContain(`<meta property="og:site_name" content="${expected.sitename}">`);
+			expect(expected.icon).toBe('https://origin.bench/favicon.ico');
+		}
+	});
+
+	test('article-unique-icon is article with the favicon href carrying the page query', () => {
+		const article = decode(fixtures.respond('GET', new URL('/article?n=5', origin)).body);
+		const unique = fixtures.respond('GET', new URL('/article-unique-icon?n=5', origin));
+		const html = decode(unique.body);
+
+		expect(unique.status).toBe(200);
+		expect(unique.headers['content-type']).toBe('text/html; charset=utf-8');
+		expect(html).toBe(article.replace('<link rel="icon" href="/favicon.ico">', '<link rel="icon" href="/favicon.ico?n=5">'));
+		expect(decode(fixtures.respond('GET', new URL('/article-unique-icon?a=1&b="2"', origin)).body))
+			.toContain('<link rel="icon" href="/favicon.ico?a=1&amp;b=%222%22">');
+		expect(fixtures.respond('HEAD', new URL('/article-unique-icon?n=5', origin)).body.length).toBe(0);
+		expect(expectationFor('article-unique-icon')).toEqual({ ...expectationFor('article'), icon: 'https://origin.bench/favicon.ico{search}' });
 	});
 
 	test('every page links the favicon', () => {
