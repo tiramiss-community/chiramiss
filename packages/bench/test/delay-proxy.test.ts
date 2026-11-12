@@ -139,3 +139,43 @@ test('counts connections and bytes to client', async () => {
 	expect(connections).toBe(2);
 	expect(bytesToClient).toBe(11);
 });
+
+test('delivers a response that the upstream ends right after writing', async () => {
+	const closing = createServer((socket) => {
+		socket.on('error', () => {});
+		socket.once('data', () => {
+			socket.end('hello-response');
+		});
+	});
+
+	await new Promise<void>((resolve) => closing.listen(0, '127.0.0.1', resolve));
+
+	const closingProxy = await startDelayProxy({
+		listenPort: 0,
+		listenHost: '127.0.0.1',
+		upstream: { host: '127.0.0.1', port: (closing.address() as AddressInfo).port },
+		getRttMs: () => 100,
+	});
+
+	try {
+		const client = connect(closingProxy.port, '127.0.0.1');
+
+		clients.push(client);
+		client.on('error', () => {});
+
+		const body = await new Promise<string>((resolve) => {
+			let got = '';
+
+			client.on('data', (chunk) => {
+				got += chunk.toString();
+			});
+			client.on('close', () => resolve(got));
+			client.write('ping');
+		});
+
+		expect(body).toBe('hello-response');
+	} finally {
+		await closingProxy.close();
+		await new Promise<void>((resolve) => closing.close(() => resolve()));
+	}
+});

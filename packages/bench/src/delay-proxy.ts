@@ -85,11 +85,16 @@ export function startDelayProxy(opts: DelayProxyOptions): Promise<{ port: number
 		upstream.on('error', destroyBoth);
 		client.on('close', () => {
 			sockets.delete(client);
-			upstream.destroy();
+			// 遅延中のデータを捨てないよう、相手側の終了もキューを通し、書き込みを流してから閉じる
+			toUpstream.run(opts.getRttMs() / 2, () => {
+				upstream.destroySoon();
+			});
 		});
 		upstream.on('close', () => {
 			sockets.delete(upstream);
-			client.destroy();
+			toClient.run(opts.getRttMs() / 2, () => {
+				client.destroySoon();
+			});
 		});
 
 		client.on('data', (chunk) => {
