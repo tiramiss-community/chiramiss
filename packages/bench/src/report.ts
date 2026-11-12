@@ -200,30 +200,23 @@ function s3Table(results: BenchResults): string {
 }
 
 function s4Table(results: BenchResults): string {
-	const labels: string[] = [];
+	const scenarios: Array<[ScenarioId, string]> = [['s1', 'S1'], ['s2', 'S2'], ['s3a', 'S3a'], ['s3b', 'S3b']];
+	const rows = scenarios
+		.filter(([scenario]) => results.runs.some((r) => r.spec.scenario === scenario))
+		.map(([scenario, label]) => {
+			const cells: string[] = [label];
 
-	for (const record of results.runs) {
-		const label = runLabel(record);
+			for (const target of ['summaly', 'chiramiss'] as const) {
+				const records = runsOf(results, target, (r) => r.spec.scenario === scenario);
 
-		if (!labels.includes(label)) {
-			labels.push(label);
-		}
-	}
+				cells.push(
+					fmt(mean(records.map((r) => (r.load.ok === 0 ? Number.NaN : r.cpuUsageUsec / 1000 / r.load.ok))), 2),
+					fmt(records.length === 0 ? Number.NaN : Math.max(...records.map((r) => r.memoryPeakBytes / MIB))),
+				);
+			}
 
-	const rows = labels.map((label) => {
-		const cells: string[] = [label];
-
-		for (const target of ['summaly', 'chiramiss'] as const) {
-			const records = runsOf(results, target, (r) => runLabel(r) === label);
-
-			cells.push(
-				fmt(mean(records.map((r) => (r.load.ok === 0 ? Number.NaN : r.cpuUsageUsec / 1000 / r.load.ok))), 2),
-				fmt(records.length === 0 ? Number.NaN : Math.max(...records.map((r) => r.memoryPeakBytes / MIB))),
-			);
-		}
-
-		return cells;
-	});
+			return cells;
+		});
 
 	return table(['S4', 'summaly CPU ms / summary', 'summaly peak MiB', 'chiramiss CPU ms / summary', 'chiramiss peak MiB'], rows);
 }

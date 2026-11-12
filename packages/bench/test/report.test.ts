@@ -149,4 +149,7 @@ test('renders the four tables', () => {
 	}
 
 	expect(report).toContain('S3a (in-flight sharing)');
+	const s4Rows = report.split('\n').filter((line) => /^\| S[123]a? \|/.test(line) && !line.includes('in-flight'));
+
+	expect(s4Rows.filter((line) => line.startsWith('| S3a |'))).toHaveLength(1);
 });
