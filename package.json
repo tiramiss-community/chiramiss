@@ -17,6 +17,7 @@
 		"test": "pnpm -r test",
 		"lint": "oxlint --deny-warnings",
 		"typecheck": "pnpm -r typecheck",
+		"bench": "pnpm --filter @tiramiss-community/chiramiss-bench bench --",
 		"release": "pnpm build && changeset publish"
 	},
 	"devDependencies": {
