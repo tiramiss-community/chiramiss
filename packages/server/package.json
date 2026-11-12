@@ -1,6 +1,6 @@
 {
 	"name": "@tiramiss-community/chiramiss-server",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"private": true,
 	"description": "summaly-compatible standalone URL summary server",
 	"license": "MIT",

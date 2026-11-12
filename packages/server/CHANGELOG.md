@@ -1,5 +1,13 @@
 # @tiramiss-community/chiramiss-server
 
+## 0.1.1
+
+### Patch Changes
+
+- 50458c5: リダイレクトを追うとき、応答の接続を捨てずに次の要求で使い回す（本文がないか短い場合）
+- Updated dependencies [50458c5]
+  - @tiramiss-community/chiramiss@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes
