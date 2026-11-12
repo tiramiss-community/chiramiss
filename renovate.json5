@@ -1,11 +1,10 @@
 {
 	$schema: 'https://docs.renovatebot.com/renovate-schema.json',
 	extends: ['config:recommended'],
-	// メジャーアップデートの承認に使う。修正版のない脆弱性もここに出す
-	dependencyDashboard: {
-		enabled: true,
-		osvVulnerabilitySummary: 'unresolved',
-	},
+	// メジャーアップデートの承認に使う。修正版のない脆弱性もここに出す。
+	// Mend のホスト版は Renovate 44 より古く、オブジェクト形式の dependencyDashboard を受け付けないので旧形式で書く
+	dependencyDashboard: true,
+	dependencyDashboardOSVVulnerabilitySummary: 'unresolved',
 	// 公開から7日経っていないバージョンは提案しない（pnpm-workspace.yaml の minimumReleaseAge と揃える）
 	minimumReleaseAge: '7 days',
 	// 7日経つまではブランチも作らない
