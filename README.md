@@ -73,7 +73,7 @@ them, so code and configuration written for summaly keep working (see
 
 - Exports: `summarize(url, options?)`, `version`, `defaultSummarizeOptions`, the types `SummaryResult`,
   `SummarizeOptions`, `SummaryPlugin` (and `Summary`, `Player`, `GeneralScrapingOptions`), and the Fastify plugin as
-  the default export. summaly's `summaly`, `summalyDefaultOptions`, `SummalyResult`, `SummalyOptions` and
+  the default export (plus `summaryCacheControl`, see [Library usage](#library-usage)). summaly's `summaly`, `summalyDefaultOptions`, `SummalyResult`, `SummalyOptions` and
   `SummalyPlugin` are exported too, as aliases of these.
 - `SummarizeOptions` keeps upstream's keys and meanings: `lang`, `followRedirects`, `plugins`, `agent`, `userAgent`,
   `responseTimeout`, `operationTimeout`, `contentLengthLimit`, `contentLengthRequired`.
@@ -186,6 +186,8 @@ Behavior that intentionally differs from summaly v5.5.2:
 - **The server** additionally reads the options Misskey sends along with `url` (see [Query parameters](#query-parameters)),
   serves `GET /healthz`, supports outbound proxies, and answers 400 when `url` is not a single string
   (e.g. given twice).
+- **`Cache-Control`** is sent by the server and the Fastify plugin (see [Standalone server](#standalone-server)).
+  Upstream's Fastify server sent none.
 
 ## Using it in Misskey
 
@@ -243,6 +245,11 @@ import chiramiss from '@tiramiss-community/chiramiss';
 
 fastify.register(chiramiss, { /* SummarizeOptions */ });
 ```
+
+The plugin sets `Cache-Control` on its responses so that a reverse proxy or CDN can cache them, by the same rules as
+the [standalone server](#standalone-server) (from the plugin's `cacheTtl` / `errorCacheTtl`, or their defaults).
+To use another policy, overwrite the header, for example in an `onSend` hook. When you serve summaries from your own
+route, `summaryCacheControl(options, 'ok' | 'error')` returns the same value.
 
 ### Options
 
@@ -380,6 +387,17 @@ Endpoints:
   without `url`, 500 `{ "error": ... }` when summarizing fails.
 - `GET /healthz` returns `{ "status": "ok" }`.
 
+Responses carry `Cache-Control`, so a reverse proxy or CDN in front of the server can cache them:
+
+- A summary: `public, max-age=<CHIRAMISS_CACHE_TTL in seconds>` (300 by default).
+- A failed summary (500): `public, max-age=<CHIRAMISS_ERROR_CACHE_TTL in seconds>` (30 by default), as long as the
+  server itself remembers the failure.
+- A TTL under one second (including `0`), a missing `url` (400) and `GET /healthz`: `no-store`.
+
+The max-age is counted from the response, not from when the server cached the result, so a result can be up to about
+twice its TTL old when it leaves a shared cache. The cache key should be the whole URL including the query, since
+`lang`, `userAgent` and the other parameters change the result.
+
 The server logs to standard output (Fastify's JSON logs), keeps state only in memory (so you can run any number of
 instances), and on SIGTERM / SIGINT finishes the requests in progress before exiting.
 
@@ -407,8 +425,8 @@ Every `CHIRAMISS_*` variable below is also accepted under its summaly name, `SUM
 | **CHIRAMISS_CONTENT_LENGTH_LIMIT**      | `10485760`                                    | Maximum response size in bytes. Upper bound for the query parameter |
 | **CHIRAMISS_CONTENT_LENGTH_REQUIRED**   | `false`                                       | Reject responses without `content-length` (`true` / `false` / `1` / `0`) |
 | **CHIRAMISS_ALLOWED_PRIVATE_NETWORKS**  | none                                          | Comma-separated canonical CIDRs exempt from the private IP block, e.g. `10.0.0.0/8,fd00::/8` |
-| **CHIRAMISS_CACHE_TTL**                 | `300000`                                      | How long successful results (and favicon checks that succeeded) are cached, in ms (`0` = not cached) |
-| **CHIRAMISS_ERROR_CACHE_TTL**           | `30000`                                       | How long failures (and favicon checks that failed) are cached, in ms (`0` = not cached) |
+| **CHIRAMISS_CACHE_TTL**                 | `300000`                                      | How long successful results (and favicon checks that succeeded) are cached, in ms (`0` = not cached). Also sets the `max-age` of summaries |
+| **CHIRAMISS_ERROR_CACHE_TTL**           | `30000`                                       | How long failures (and favicon checks that failed) are cached, in ms (`0` = not cached). Also sets the `max-age` of failed summaries |
 | **HTTP_PROXY** / `http_proxy`           | none                                          | Proxy for `http:` targets (`http:` or `https:` URL with a host) |
 | **HTTPS_PROXY** / `https_proxy`         | none                                          | Proxy for `https:` targets |
 | **NO_PROXY** / `no_proxy`               | none                                          | Hosts that bypass the proxy (see [Proxies](#proxies)) |

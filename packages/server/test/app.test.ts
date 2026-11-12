@@ -373,6 +373,85 @@ describe('環境変数で設定したサーバーの動作', () => {
 		expect(sets.map(entry => entry.kind).sort()).toEqual(['icon', 'ok']);
 		expect(sets.find(entry => entry.kind === 'ok')).toMatchObject({ kind: 'ok', value: { title: 'KISS principle' } });
 	});
+
+	describe('Cache-Control', () => {
+		test('成功した応答は既定でライブラリのキャッシュ TTL (5 分) だけ共有キャッシュに置ける', async () => {
+			app = await createApp({});
+			const res = await app.inject({ method: 'GET', url: '/', query: { url: targetUrl } });
+
+			expect(res.statusCode).toBe(200);
+			expect(res.headers['cache-control']).toBe('public, max-age=300');
+		});
+
+		test('成功した応答の max-age は CACHE_TTL に従う (秒に切り捨て)', async () => {
+			app = await createApp({ CHIRAMISS_CACHE_TTL: '61999' });
+			const res = await app.inject({ method: 'GET', url: '/', query: { url: targetUrl } });
+
+			expect(res.statusCode).toBe(200);
+			expect(res.headers['cache-control']).toBe('public, max-age=61');
+		});
+
+		test('キャッシュから返した応答にも同じ Cache-Control が付く', async () => {
+			app = await createApp({});
+			const url = new URL('/counted', targetUrl).href;
+
+			await app.inject({ method: 'GET', url: '/', query: { url } });
+			const second = await app.inject({ method: 'GET', url: '/', query: { url } });
+
+			expect(countedHits).toBe(1);
+			expect(second.headers['cache-control']).toBe('public, max-age=300');
+		});
+
+		test('要約に失敗した応答は既定で ERROR_CACHE_TTL (30 秒) だけ置ける', async () => {
+			app = await createApp({});
+			const res = await app.inject({ method: 'GET', url: '/', query: { url: new URL('/large', targetUrl).href } });
+
+			expect(res.statusCode).toBe(500);
+			expect(res.headers['cache-control']).toBe('public, max-age=30');
+		});
+
+		test('要約に失敗した応答の max-age は ERROR_CACHE_TTL に従う', async () => {
+			app = await createApp({ CHIRAMISS_ERROR_CACHE_TTL: '5000' });
+			const res = await app.inject({ method: 'GET', url: '/', query: { url: new URL('/large', targetUrl).href } });
+
+			expect(res.statusCode).toBe(500);
+			expect(res.headers['cache-control']).toBe('public, max-age=5');
+		});
+
+		test('TTL が 0 なら no-store', async () => {
+			app = await createApp({ CHIRAMISS_CACHE_TTL: '0', CHIRAMISS_ERROR_CACHE_TTL: '0' });
+			const ok = await app.inject({ method: 'GET', url: '/', query: { url: targetUrl } });
+			const failed = await app.inject({ method: 'GET', url: '/', query: { url: new URL('/large', targetUrl).href } });
+
+			expect(ok.statusCode).toBe(200);
+			expect(ok.headers['cache-control']).toBe('no-store');
+			expect(failed.statusCode).toBe(500);
+			expect(failed.headers['cache-control']).toBe('no-store');
+		});
+
+		test('TTL が 1 秒未満なら no-store', async () => {
+			app = await createApp({ CHIRAMISS_CACHE_TTL: '999' });
+			const res = await app.inject({ method: 'GET', url: '/', query: { url: targetUrl } });
+
+			expect(res.statusCode).toBe(200);
+			expect(res.headers['cache-control']).toBe('no-store');
+		});
+
+		test('url が指定されていない 400 は no-store', async () => {
+			app = await createApp({});
+			const res = await app.inject({ method: 'GET', url: '/' });
+
+			expect(res.statusCode).toBe(400);
+			expect(res.headers['cache-control']).toBe('no-store');
+		});
+
+		test('GET /healthz は no-store', async () => {
+			app = await createApp({});
+			const res = await app.inject({ method: 'GET', url: '/healthz' });
+
+			expect(res.headers['cache-control']).toBe('no-store');
+		});
+	});
 });
 
 describe('parseQueryOptions', () => {

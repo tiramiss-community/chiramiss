@@ -5,6 +5,8 @@ import { DEFAULT_BOT_UA } from '@/version.js';
 export const DEFAULT_RESPONSE_TIMEOUT = 20 * 1000;
 export const DEFAULT_OPERATION_TIMEOUT = 60 * 1000;
 export const DEFAULT_MAX_RESPONSE_SIZE = 10 * 1024 * 1024;
+export const DEFAULT_CACHE_TTL = 5 * 60 * 1000;
+export const DEFAULT_ERROR_CACHE_TTL = 30 * 1000;
 
 /** Request settings with every default filled in. */
 export type ResolvedOptions = {

@@ -7,6 +7,7 @@ import { type ScrapeContext, createScrapeContext, fetchWithContext, fixOptions }
 import { scrapeGeneral } from '@/extract/general.js';
 import { privateIpAllowedByEnv } from '@/http/address-guard.js';
 import { GuardedAgentPool } from '@/http/agent-pool.js';
+import { DEFAULT_CACHE_TTL, DEFAULT_ERROR_CACHE_TTL } from '@/options.js';
 import { builtinProviders } from '@/providers/index.js';
 import { fromPlugin } from '@/providers/provider.js';
 import type { SummarizeOptions, SummaryResult } from '@/types.js';
@@ -14,6 +15,7 @@ import { VERSION } from '@/version.js';
 
 export const version: string = VERSION;
 
+export { summaryCacheControl } from '@/cache-control.js';
 export { InProcessCoordinator } from '@/coalesce/in-process-coordinator.js';
 export { MemorySummaryCache } from '@/coalesce/memory-cache.js';
 export type { MemorySummaryCacheOptions } from '@/coalesce/memory-cache.js';
@@ -53,9 +55,6 @@ export const defaultSummarizeOptions: SummarizeOptions = {
  * Alias of `defaultSummarizeOptions`, kept for summaly compatibility.
  */
 export const summalyDefaultOptions: SummarizeOptions = defaultSummarizeOptions;
-
-const DEFAULT_CACHE_TTL = 5 * 60 * 1000;
-const DEFAULT_ERROR_CACHE_TTL = 30 * 1000;
 
 /**
  * Creates a summarize function with its own result cache, in-flight sharing and connection pool.
