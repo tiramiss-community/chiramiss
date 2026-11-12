@@ -1,9 +1,12 @@
 // Derived from misskey-dev/summaly (MIT)
+import { summaryCacheControl } from '@/cache-control.js';
 import { summarize } from '@/index.js';
 import type { SummarizeOptions } from '@/types.js';
 
 type ReplyLike = {
-	status(code: number): { send(payload: unknown): unknown };
+	status(code: number): ReplyLike;
+	header(name: string, value: string): ReplyLike;
+	send(payload: unknown): unknown;
 };
 
 type RequestLike = {
@@ -21,6 +24,7 @@ export type FastifyLike = {
 
 /**
  * Fastify plugin compatible with upstream summaly's default export.
+ * Unlike upstream, responses carry Cache-Control (see summaryCacheControl; `no-store` for a missing url).
  */
 export default function summaryPlugin(fastify: FastifyLike, options: SummarizeOptions, done: (err?: Error) => void): void {
 	fastify.get('/', async (req, reply) => {
@@ -28,19 +32,23 @@ export default function summaryPlugin(fastify: FastifyLike, options: SummarizeOp
 		const url = query.url;
 
 		if (url == null) {
-			return reply.status(400).send({
+			return reply.status(400).header('cache-control', 'no-store').send({
 				error: 'url is required',
 			});
 		}
 
 		try {
-			return await summarize(url, {
+			const summary = await summarize(url, {
 				lang: query.lang,
 				followRedirects: false,
 				...options,
 			});
+
+			reply.header('cache-control', summaryCacheControl(options, 'ok'));
+
+			return summary;
 		} catch (e) {
-			return reply.status(500).send({
+			return reply.status(500).header('cache-control', summaryCacheControl(options, 'error')).send({
 				error: e,
 			});
 		}

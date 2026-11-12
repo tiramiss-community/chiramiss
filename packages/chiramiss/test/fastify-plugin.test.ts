@@ -95,6 +95,48 @@ describe('fastify plugin', () => {
 		expect(res.json().title).toContain('lang:ja-JP');
 	});
 
+	describe('Cache-Control', () => {
+		test('a summary may be cached for cacheTtl (300 s by default)', async () => {
+			const { app, origin } = await setup();
+			const res = await app.inject({ method: 'GET', url: '/', query: { url: `${origin}/ok-cc-default` } });
+
+			expect(res.statusCode).toBe(200);
+			expect(res.headers['cache-control']).toBe('public, max-age=300');
+		});
+
+		test('the max-age follows the cacheTtl option', async () => {
+			const { app, origin } = await setup({ cacheTtl: 61999 });
+			const res = await app.inject({ method: 'GET', url: '/', query: { url: `${origin}/ok-cc-ttl` } });
+
+			expect(res.statusCode).toBe(200);
+			expect(res.headers['cache-control']).toBe('public, max-age=61');
+		});
+
+		test('a failure may be cached for errorCacheTtl', async () => {
+			const { app, origin } = await setup({ errorCacheTtl: 5000 });
+			const res = await app.inject({ method: 'GET', url: '/', query: { url: `${origin}/missing-cc` } });
+
+			expect(res.statusCode).toBe(500);
+			expect(res.headers['cache-control']).toBe('public, max-age=5');
+		});
+
+		test('a TTL of 0 gives no-store', async () => {
+			const { app, origin } = await setup({ cacheTtl: 0 });
+			const res = await app.inject({ method: 'GET', url: '/', query: { url: `${origin}/ok-cc-zero` } });
+
+			expect(res.statusCode).toBe(200);
+			expect(res.headers['cache-control']).toBe('no-store');
+		});
+
+		test('a missing url gives no-store', async () => {
+			const { app } = await setup();
+			const res = await app.inject({ method: 'GET', url: '/' });
+
+			expect(res.statusCode).toBe(400);
+			expect(res.headers['cache-control']).toBe('no-store');
+		});
+	});
+
 	test('plugin options override the defaults', async () => {
 		const { app, origin } = await setup({ followRedirects: true });
 		const res = await app.inject({ method: 'GET', url: '/', query: { url: `${origin}/redir-follow` } });
