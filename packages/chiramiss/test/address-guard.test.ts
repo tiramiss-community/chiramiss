@@ -104,6 +104,39 @@ describe('AddressGuard', () => {
 		expect(addresses).toEqual(['93.184.216.34', '2606:2800:220:1:248:1893:25c8:1946']);
 	});
 
+	// ipaddr.isValid (IPv4.isValid) builds and catches an Error for every string with no IPv4 form, and
+	// assertHostAllowed runs on every request.
+	test('assertHostAllowed はホスト名を IPv4 として検証しない', async () => {
+		const lookup = vi.spyOn(promisesLookupAll, 'lookup').mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+		const isValid = vi.spyOn(ipaddr.IPv4, 'isValid');
+
+		try {
+			await assertHostAllowed(createAddressGuard(), 'example.test');
+			// The resolved address is checked afterwards; that call is cheap.
+			expect(isValid).not.toHaveBeenCalledWith('example.test');
+		} finally {
+			isValid.mockRestore();
+			lookup.mockRestore();
+		}
+	});
+
+	// Which strings count as IP literals (checked as is) and which as host names (resolved) must stay what
+	// ipaddr.isValid says, including the octal, hex and short IPv4 forms and the strings that only look like them.
+	test.each([
+		'127.0.0.1', '127.1', '0x7f.1', '0x7f000001', '2130706433', '017700000001', '127.0.1',
+		'4294967296', '08.0.0.1', '1.2.3.256', '0x', '1.2.3.4.5', 'cafe.bad', 'example.test', '1.2.3.4.example',
+		'::1', 'fe80::1%eth0', '::ffff:127.0.0.1', ':::', '1::2::3',
+	])('assertHostAllowed は %s を ipaddr.isValid と同じく扱う', async host => {
+		const lookup = vi.spyOn(promisesLookupAll, 'lookup').mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+
+		try {
+			await assertHostAllowed(createAddressGuard(), host).catch(() => {});
+			expect(lookup).toHaveBeenCalledTimes(ipaddr.isValid(host) ? 0 : 1);
+		} finally {
+			lookup.mockRestore();
+		}
+	});
+
 	test('createGuardedLookup は接続時の名前解決でも拒否する', async () => {
 		const lookup = createGuardedLookup(createAddressGuard());
 		const err = await new Promise<NodeJS.ErrnoException | null>(resolve => lookup('localhost', {}, e => resolve(e)));

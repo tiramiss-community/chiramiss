@@ -90,6 +90,19 @@ function rejected(ip: string): StatusError {
 }
 
 /**
+ * Same result as ipaddr.isValid, which (through IPv4.isValid) builds and catches an Error for every string with no
+ * IPv4 form, i.e. for every host name (this runs on every request). IPv4.isIPv4 only runs the regexes; it throws
+ * only for strings shaped like IPv4 whose numbers it cannot read, which isValid rejects as well.
+ */
+function isIpLiteral(host: string): boolean {
+	try {
+		return ipaddr.IPv6.isValid(host) || (ipaddr.IPv4.isIPv4(host) && ipaddr.IPv4.isValid(host));
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Checks every address `hostname` resolves to and returns them (in resolution order) when all are allowed.
  * An IP literal is checked as is (brackets stripped) and returned as the only address.
  * Callers that connect through a proxy must connect to one of the returned addresses, not re-resolve the name.
@@ -100,7 +113,7 @@ export async function assertHostAllowed(guard: AddressGuard, hostname: string): 
 	if (host === '') {
 		throw noAddress(hostname);
 	}
-	if (ipaddr.isValid(host)) {
+	if (isIpLiteral(host)) {
 		if (!isAddressAllowed(guard, host)) {
 			throw rejected(host);
 		}
