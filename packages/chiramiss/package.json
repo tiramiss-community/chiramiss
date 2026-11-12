@@ -1,6 +1,6 @@
 {
 	"name": "@tiramiss-community/chiramiss",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"description": "summaly-compatible URL summary library",
 	"license": "MIT",
 	"repository": {
