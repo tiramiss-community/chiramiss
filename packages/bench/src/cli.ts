@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { parseCgroup } from './cgroup.ts';
 import { compose, execCommand, imageDigest, nodeVersionOfImage, pullImage } from './docker.ts';
 import { expectationFor } from './fixtures.ts';
+import { renderReport } from './report.ts';
 import { buildPlan, urlsFor, warmupUrlsFor } from './scenarios.ts';
 import { summarize } from './stats.ts';
 import { SERVICE, targetEnv } from './targets.ts';
@@ -326,6 +327,7 @@ export async function main(argv: string[]): Promise<void> {
 
 			mkdirSync(outDir, { recursive: true });
 			writeFileSync(join(outDir, 'results.json'), `${JSON.stringify(results, null, '\t')}\n`);
+			writeFileSync(join(outDir, 'report.md'), renderReport(results));
 			log(`results: ${outDir}`);
 		} finally {
 			log('cleaning up (docker compose down -v)');
