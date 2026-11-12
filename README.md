@@ -144,8 +144,10 @@ Behavior that intentionally differs from summaly v5.5.2:
   A page whose header or meta declares the wrong charset is now decoded as declared.
 - **oEmbed and favicon requests** use the same User-Agent, timeouts and size limit as the page request.
 - **Connections are reused for a short time.** The requests one summary sends to the same site (the HEAD that
-  follows redirects, the page, the favicon, oEmbed) share a keep-alive connection, and a connection that finished its
-  response stays open for up to 4 seconds of idle time, so the next summary of that site made by the same summarizer
+  follows redirects, the page, the favicon, oEmbed) share a keep-alive connection, redirect hops included: a redirect
+  response without a body or with a short one (up to 16 KB, arriving within 0.5 seconds) is read to its end so that its
+  connection serves the next hop, while a longer body is not read and its connection is closed. A connection that
+  finished its response stays open for up to 4 seconds of idle time, so the next summary of that site made by the same summarizer
   with the same `allowedPrivateNetworks` reuses it instead of opening a new one (upstream reuses connections too, through
   Node's global agent). Each summarizer (`createSummarizer`, and the one behind `summarize`) keeps its own connections:
   separate summarizers, and summaries with different `allowedPrivateNetworks`, never share one, and every connection is
