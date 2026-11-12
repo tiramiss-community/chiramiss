@@ -44,9 +44,10 @@ Measured on an i7-14700K under WSL2:
 
 `certs/` holds a CA and a server certificate for `origin.bench`. They exist only for this benchmark, are not secrets, and must never be trusted anywhere else. Regenerate them with `certs/generate.sh` (validity is 100 years).
 
-## Updating the README for a release
+## Updating the benchmark report for a release
 
 1. Check out the release tag.
 2. Make sure the working tree is clean (the report warns when it is not).
 3. Run `pnpm bench` without `--quick`.
-4. Paste the whole of `report.md` into the main README: the headline, any warnings, the tables, the Notes and the Environment section. Do not drop the Notes or the warnings; they say what the numbers include (for example the favicon-check cache in S1).
+4. Replace the report in [`docs/benchmark.md`](../../docs/benchmark.md) with the whole of `report.md`: the headline, any warnings, the tables, the Notes and the Environment section. Do not drop the Notes or the warnings; they say what the numbers include (for example the favicon-check cache in S1). Update the introductory measurement date, commit and revision context to match the new run.
+5. Update the [main README performance overview](../../README.md#performance) to match the report, including the measurement date, commit and favicon-cache conditions. Keep the full tables and caveats in `docs/benchmark.md`.

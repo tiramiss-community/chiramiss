@@ -18,61 +18,19 @@ import { summarize } from '@tiramiss-community/chiramiss';
 const summary = await summarize('https://example.com/', { lang: 'ja-JP' });
 ```
 
-## Names kept for summaly compatibility
-
-chiramiss's own names are the primary ones. summaly's names are exported too, as aliases that are the very same values
-and types (`summaly === summarize`). They are not deprecated.
-
-| summaly name (alias)                             | chiramiss name                                  |
-|:-------------------------------------------------|:------------------------------------------------|
-| `summaly(url, options)`                          | `summarize(url, options)`                       |
-| `createSummaly(base)`                            | `createSummarizer(base)`                        |
-| `summalyDefaultOptions`                          | `defaultSummarizeOptions`                       |
-| `SummalyResult`                                  | `SummaryResult`                                 |
-| `SummalyOptions`                                 | `SummarizeOptions`                              |
-| `SummalyPlugin`                                  | `SummaryPlugin`                                 |
-| `SUMMALY_*` (every variable of the standalone server) | `CHIRAMISS_*` (same suffix, e.g. `SUMMALY_HOST` → `CHIRAMISS_HOST`) |
-| `SUMMALY_ALLOW_PRIVATE_IP` (read by the library) | `CHIRAMISS_ALLOW_PRIVATE_IP`                    |
-
-For each environment variable, `CHIRAMISS_<NAME>` is used when it is set; otherwise `SUMMALY_<NAME>` is used. An empty
-value counts as unset. The default export (the Fastify plugin), `version` and the default User-Agent
-(`ChiramissBot/...`) do not change.
-
 ## Using it in Misskey
 
-**Swap it in with an npm alias (no code changes).** Misskey imports the package as `@misskey-dev/summaly`, so replace
-it with an npm alias in every package that depends on it (`packages/backend`, `packages/frontend`,
-`packages/frontend-embed`):
-
-```json
-{
-  "dependencies": {
-    "@misskey-dev/summaly": "npm:@tiramiss-community/chiramiss@^0.1.0"
-  }
-}
-```
-
-Then run `pnpm install`. No code changes are needed: `summaly` and `SummalyResult` are aliases of chiramiss's names.
-
-**Import `@tiramiss-community/chiramiss` directly.** Depend on `@tiramiss-community/chiramiss` under its own name and
-use chiramiss's names:
-
-```ts
-// backend
-const { summarize } = await import('@tiramiss-community/chiramiss');
-const summary = await summarize(url, { lang, agent: { http: httpAgent, https: httpsAgent } });
-```
-
-```ts
-// frontend
-import type { SummaryResult } from '@tiramiss-community/chiramiss';
-```
+Use an npm alias for `@misskey-dev/summaly` or import `@tiramiss-community/chiramiss` directly.
+The existing `summaly` and `SummalyResult` exports remain supported aliases and are not deprecated.
+See the [Misskey integration guide](https://github.com/tiramiss-community/chiramiss/blob/main/docs/misskey.md)
+for setup instructions, including the standalone summary proxy option.
 
 ## Documentation
 
-See the [README on GitHub](https://github.com/tiramiss-community/chiramiss#readme) for the options, caching, custom
-plugins, proxies, the standalone server (Docker image `ghcr.io/tiramiss-community/chiramiss`), security notes and
-differences from upstream.
+- [Library guide](https://github.com/tiramiss-community/chiramiss/blob/main/docs/library.md): options, caching, custom plugins and proxies.
+- [summaly compatibility](https://github.com/tiramiss-community/chiramiss/blob/main/docs/compatibility.md): exports, result fields, aliases, behavior differences and limitations.
+- [Standalone server](https://github.com/tiramiss-community/chiramiss/blob/main/docs/server.md): Docker, HTTP API, configuration and deployment.
+- [Project overview](https://github.com/tiramiss-community/chiramiss#readme): ChiramissBot information, features and benchmark overview.
 
 ## License
 
