@@ -7,3 +7,4 @@ docs
 **/*.tsbuildinfo
 npm-debug.log
 .claude
+packages/bench

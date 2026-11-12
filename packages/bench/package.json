@@ -1,0 +1,21 @@
+{
+	"name": "@tiramiss-community/chiramiss-bench",
+	"version": "0.0.0",
+	"private": true,
+	"description": "benchmark comparing chiramiss with upstream summaly",
+	"license": "MIT",
+	"type": "module",
+	"engines": {
+		"node": "^22.22.2 || ^24.17.0 || >=26.4.0"
+	},
+	"scripts": {
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"bench": "node src/cli.ts"
+	},
+	"devDependencies": {
+		"@types/node": "26.6.6",
+		"typescript": "7.0.2",
+		"vitest": "5.1.0"
+	}
+}

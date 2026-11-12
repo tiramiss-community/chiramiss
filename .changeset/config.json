@@ -5,5 +5,6 @@
   "fixed": [["@tiramiss-community/chiramiss", "@tiramiss-community/chiramiss-server"]],
   "access": "public",
   "baseBranch": "main",
+  "ignore": ["@tiramiss-community/chiramiss-bench"],
   "privatePackages": { "version": true, "tag": true }
 }
