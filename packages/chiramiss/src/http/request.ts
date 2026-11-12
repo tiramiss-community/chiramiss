@@ -157,6 +157,11 @@ function buildHeaders(headers: FetchRequest['headers']): http.OutgoingHttpHeader
 	return result;
 }
 
+/** Whether `agent` is one of the transport's guarded agents, whose new sockets are checked when they connect. */
+function isGuardedAgent(transport: Transport, agent: http.Agent | undefined): boolean {
+	return agent !== undefined && (agent === transport.guardedAgents?.http || agent === transport.guardedAgents?.https);
+}
+
 /** Sends one hop and resolves once the response headers arrive. */
 async function sendRequest(transport: Transport, req: FetchRequest, url: URL, signal: AbortSignal) {
 	const isHttps = url.protocol === 'https:';
@@ -168,18 +173,22 @@ async function sendRequest(transport: Transport, req: FetchRequest, url: URL, si
 	if (!callerAgent) {
 		let validated: string[] | undefined;
 
-		if (transport.guard) {
-			// Gate every hop before connecting or asking the proxy. This is the only check of the target when
-			// it is an IP literal (net.connect skips `lookup`) or when the hop goes through the proxy.
+		agent = selectOwnedAgent(transport, url);
+		// Direct hops use the transport-owned guarded agents, whose lookup checks every address a new socket connects
+		// to (DNS rebinding defense). They never hold sockets opened under another policy, so a reused socket was
+		// checked the same way when it connected. A direct hop to a name therefore needs no check here: a lookup would
+		// only add a DNS query to every hop, reused socket or not (Node does not cache DNS).
+		// Every other hop is gated before connecting or asking the proxy, as this is the only check of its target:
+		// an IP literal or a hop through the proxy. "IP literal" is decided by net.isIP, the same test net.connect uses
+		// to skip `lookup`, so no host can skip both checks.
+		const checkedOnConnect = isGuardedAgent(transport, agent) && net.isIP(url.hostname.replace(/^\[|\]$/g, '')) === 0;
+
+		if (transport.guard && !checkedOnConnect) {
 			validated = await abortable(assertHostAllowed(transport.guard, url.hostname), signal);
 		}
-		// Direct hops use the transport-owned guarded agents, whose lookup re-checks at connect time
-		// (DNS rebinding defense). They never hold sockets opened under another policy, so that check
-		// is never skipped by socket reuse.
 		// Proxied hops tunnel to an address validated above, so the proxy never resolves the name again
 		// (DNS rebinding / split-horizon DNS). The proxy agents read them from the request options and
 		// try them in order (IPv4 first) until a tunnel opens, all under the operation's signal.
-		agent = selectOwnedAgent(transport, url);
 		tunnelTarget = { addresses: validated && ipv4First(validated), signal };
 	}
 
@@ -195,7 +204,7 @@ async function sendRequest(transport: Transport, req: FetchRequest, url: URL, si
 	}
 	// The guarded agents set a timeout on their sockets for idle ones (see createGuardedAgents); a request on them must
 	// replace it with its own (0 turns it off), or it would be cut while waiting for the server.
-	const guardedHop = agent !== undefined && (agent === transport.guardedAgents?.http || agent === transport.guardedAgents?.https);
+	const guardedHop = isGuardedAgent(transport, agent);
 
 	if (req.responseTimeout > 0 || guardedHop) {
 		options.timeout = req.responseTimeout;

@@ -154,7 +154,8 @@ Behavior that intentionally differs from summaly v5.5.2:
   with the same `allowedPrivateNetworks` reuses it instead of opening a new one (upstream reuses connections too, through
   Node's global agent). Each summarizer (`createSummarizer`, and the one behind `summarize`) keeps its own connections:
   separate summarizers, and summaries with different `allowedPrivateNetworks`, never share one, and every connection is
-  checked against the private IP block of its setting when it opens. At most 4 idle connections are kept per site,
+  checked against the private IP block of its setting when it opens. A request that reuses a connection goes to the
+  address checked when the connection opened, without resolving the site's name again. At most 4 idle connections are kept per site,
   idle connections never keep the process from exiting, and a request that fails or times out never leaves its
   connection for reuse. This applies to chiramiss's own connections, not to a caller-supplied `agent` or to proxied
   requests (a proxied connection is closed when its summary ends). With the private IP block turned off
