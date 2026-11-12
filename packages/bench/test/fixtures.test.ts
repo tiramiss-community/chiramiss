@@ -135,4 +135,19 @@ describe('fixtures', () => {
 	test('unknown path is 404', () => {
 		expect(fixtures.respond('GET', new URL('/nope', origin)).status).toBe(404);
 	});
+
+	// Without content-length, Node's server closes the connection after a HEAD response,
+	// which would make every client open a new connection after each HEAD.
+	test('every response declares content-length, and HEAD declares the GET body length', () => {
+		const paths = [...PAGE_KINDS.map(pagePath), pagePath('article-unique-icon'), '/oembed.json', '/favicon.ico', '/nope'];
+
+		for (const path of paths) {
+			const url = new URL(`${path}?n=1`, origin);
+			const get = fixtures.respond('GET', url);
+			const head = fixtures.respond('HEAD', url);
+
+			expect(get.headers['content-length'], path).toBe(String(get.body.length));
+			expect(head.headers['content-length'], path).toBe(String(get.body.length));
+		}
+	});
 });

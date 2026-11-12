@@ -241,21 +241,22 @@ export function buildFixtures(): Fixtures {
 
 	return {
 		respond(method, url) {
-			if (url.pathname === PAGE_PATHS.redirect) {
-				return { status: 302, headers: { location: `${PAGE_PATHS.article}${url.search}` }, body: new Uint8Array(0) };
-			}
+			const found = find(url);
+			// Every response declares its length. Without it, Node's server closes the connection after a HEAD
+			// response, so every client would need a new connection after each HEAD — unlike typical sites.
+			const headers = { ...found.headers, 'content-length': String(found.body.length) };
 
-			const found = url.pathname === PAGE_PATHS['article-unique-icon'] ? uniqueIcon(url) : pages.get(url.pathname);
-
-			if (found === undefined) {
-				return { status: 404, headers: { 'content-type': 'text/plain' }, body: new TextEncoder().encode('not found') };
-			}
-
-			if (method === 'HEAD') {
-				return { status: found.status, headers: found.headers, body: new Uint8Array(0) };
-			}
-
-			return found;
+			return { status: found.status, headers, body: method === 'HEAD' ? new Uint8Array(0) : found.body };
 		},
 	};
+
+	function find(url: URL): FixtureResponse {
+		if (url.pathname === PAGE_PATHS.redirect) {
+			return { status: 302, headers: { location: `${PAGE_PATHS.article}${url.search}` }, body: new Uint8Array(0) };
+		}
+
+		const found = url.pathname === PAGE_PATHS['article-unique-icon'] ? uniqueIcon(url) : pages.get(url.pathname);
+
+		return found ?? { status: 404, headers: { 'content-type': 'text/plain' }, body: new TextEncoder().encode('not found') };
+	}
 }

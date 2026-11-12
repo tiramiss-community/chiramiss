@@ -96,6 +96,17 @@ test('stats count requests by method and path, connections and bytes; reset zero
 	expect(await stats()).toEqual({ requests: {}, newConnections: 0, bytesOut: 0 });
 });
 
+test('a keep-alive connection survives a HEAD and is reused by the next request', async () => {
+	const agent = newAgent(true);
+
+	await get(agent, 'HEAD', '/article?n=1');
+	await get(agent, 'GET', '/article?n=1');
+	await get(agent, 'HEAD', '/article?n=2');
+	await get(agent, 'GET', '/article?n=2');
+
+	expect((await stats()).newConnections).toBe(1);
+});
+
 test('PUT /rtt changes latency', async () => {
 	expect((await control('PUT', '/rtt?ms=100')).status).toBe(204);
 
