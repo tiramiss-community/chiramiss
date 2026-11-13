@@ -40,7 +40,7 @@
 	"devDependencies": {
 		"@types/node": "26.6.6",
 		"fastify": "5.12.8",
-		"tsdown": "0.23.5",
+		"tsdown": "0.23.7",
 		"typescript": "7.0.2",
 		"vitest": "5.1.0"
 	},
