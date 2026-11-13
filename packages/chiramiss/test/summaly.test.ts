@@ -403,23 +403,19 @@ describe('chiramiss additions', () => {
 
 		expect(summaryA.title).toBe('A');
 		expect(summaryB.title).toBe('B');
-		// HEAD (final URL), GET (page) and HEAD (/favicon.ico) each went through the caller's own agent only.
-		expect(a.ports.length).toBeGreaterThanOrEqual(3);
-		expect(b.ports.length).toBeGreaterThanOrEqual(3);
+		// GET (page) and HEAD (/favicon.ico) each went through the caller's own agent only.
+		expect(a.ports.length).toBeGreaterThanOrEqual(2);
+		expect(b.ports.length).toBeGreaterThanOrEqual(2);
 		expect(a.ports.every(port => port === portA)).toBe(true);
 		expect(b.ports.every(port => port === portB)).toBe(true);
 	});
 
-	test('最終 URL 解決の HEAD もリダイレクト先がプライベート IP なら拒否される', async ({ skip }) => {
-		let targetHits = 0;
-		const target = await serve((_req, res) => {
-			targetHits++;
-			sendWithLength(res, Buffer.from('<html><head><title>secret</title></head></html>'));
-		}, '127.0.0.1');
+	/** An origin on 127.0.0.2 that redirects `/` to `target` (for `method` only, if given); skips where 127.0.0.2 is missing. */
+	async function redirectingTo(target: string, skip: (note: string) => void, method?: string): Promise<{ origin: string; methods: string[] }> {
 		const methods: string[] = [];
 		const origin = await serve((req, res) => {
 			methods.push(`${req.method} ${req.url}`);
-			if (req.method === 'HEAD' && req.url === '/') {
+			if (req.url === '/' && (method === undefined || req.method === method)) {
 				res.writeHead(302, { location: `${target}/` });
 				res.end();
 			} else if (req.url === '/') {
@@ -434,26 +430,65 @@ describe('chiramiss additions', () => {
 			throw e;
 		});
 
-		const summary = await summarize(`${origin}/`, { allowedPrivateNetworks: ['127.0.0.2/32'] });
+		return { origin, methods };
+	}
+
+	test('ページの GET のリダイレクト先がプライベート IP なら、接続する前に拒否する', async ({ skip }) => {
+		let targetHits = 0;
+		const target = await serve((_req, res) => {
+			targetHits++;
+			sendWithLength(res, Buffer.from('<html><head><title>secret</title></head></html>'));
+		}, '127.0.0.1');
+		const { origin, methods } = await redirectingTo(target, skip);
+
+		const e = await summarize(`${origin}/`, { allowedPrivateNetworks: ['127.0.0.2/32'] }).catch((e: unknown) => e);
+
+		expect(e).toBeInstanceOf(StatusError);
+		expect((e as StatusError).message).toBe('Private IP rejected 127.0.0.1');
+		expect(methods).toEqual(['GET /']);
+		expect(targetHits).toBe(0);
+	});
+
+	test('最終 URL 解決の HEAD もリダイレクト先がプライベート IP なら拒否され、元の URL のままプロバイダに渡る', async ({ skip }) => {
+		let targetHits = 0;
+		const target = await serve((_req, res) => {
+			targetHits++;
+			res.end();
+		}, '127.0.0.1');
+		const { origin, methods } = await redirectingTo(target, skip, 'HEAD');
+		const urls: string[] = [];
+		// A provider for the origin's URLs, so the final URL is resolved with a HEAD.
+		const plugin: SummaryPlugin = {
+			test: url => url.hostname === '127.0.0.2',
+			summarize: async url => {
+				urls.push(url.href);
+
+				return { title: 'plugin', icon: null, description: null, thumbnail: null, thumbnailStyle: null, sitename: null, player: { url: null, width: null, height: null, allow: [] }, activityPub: null, fediverseCreator: null };
+			},
+		};
+
+		const summary = await summarize(`${origin}/`, { plugins: [plugin], allowedPrivateNetworks: ['127.0.0.2/32'] });
 
 		// The HEAD's redirect to 127.0.0.1 is rejected before connecting, so the original URL is used (as upstream does on HEAD failure).
-		expect(methods[0]).toBe('HEAD /');
+		expect(methods).toEqual(['HEAD /']);
 		expect(targetHits).toBe(0);
 		expect(summary.url).toBe(`${origin}/`);
-		expect(summary.title).toBe('origin');
+		expect(urls).toEqual([`${origin}/`]);
 	});
 
 	test('既定 UA は DEFAULT_BOT_UA', async () => {
 		const content = fixture('htmls/basic.html');
 		const uas: (string | undefined)[] = [];
-		const host = await serve(onlyRoot((req, res) => {
+		const page = onlyRoot((_req, res) => sendWithLength(res, content));
+		const host = await serve((req, res) => {
 			uas.push(req.headers['user-agent']);
-			sendWithLength(res, content);
-		}));
+			page(req, res);
+		});
 
 		await summarize(host, { allowedPrivateNetworks });
 
 		expect(DEFAULT_BOT_UA).toMatch(/^ChiramissBot\//);
+		// The page GET and the favicon HEAD.
 		expect(uas.length).toBeGreaterThanOrEqual(2);
 		expect(uas.every(ua => ua === DEFAULT_BOT_UA)).toBe(true);
 	});
@@ -536,5 +571,248 @@ describe('chiramiss additions', () => {
 
 		expect(builtin).toMatchObject({ title: 'Wiki', description: 'text', sitename: 'Wikipedia', url: 'https://ja.wikipedia.org/wiki/Wiki' });
 		expect(calls).toHaveLength(2);
+	});
+});
+
+describe('最終 URL の解決とページの取得', () => {
+	const PAGE = Buffer.from('<html><head><title>page</title></head><body></body></html>');
+	const pluginResult: Summary = {
+		title: 'from plugin',
+		icon: null,
+		description: null,
+		thumbnail: null,
+		thumbnailStyle: null,
+		player: { url: null, width: null, height: null, allow: [] },
+		sitename: null,
+		activityPub: null,
+		fediverseCreator: null,
+	};
+
+	/** A plugin for the URLs whose path starts with `prefix`; records the URLs it summarizes. */
+	function pathPlugin(prefix: string): { plugin: SummaryPlugin; urls: string[] } {
+		const urls: string[] = [];
+
+		return {
+			plugin: {
+				test: url => url.pathname.startsWith(prefix),
+				summarize: async url => {
+					urls.push(url.href);
+
+					return { ...pluginResult };
+				},
+			},
+			urls,
+		};
+	}
+
+	/** Records `METHOD path` of the page requests (the favicon check is left out) and the connections. */
+	async function recordingServer(handler: Handler): Promise<{ host: string; requests: string[]; connections: () => number }> {
+		const requests: string[] = [];
+		const sockets = new Set<unknown>();
+		const host = await serve((req, res) => {
+			sockets.add(req.socket);
+			if (req.url !== '/favicon.ico') {
+				requests.push(`${req.method} ${req.url}`);
+			}
+			handler(req, res);
+		});
+
+		return { host, requests, connections: () => sockets.size };
+	}
+
+	test('プロバイダに当たらない URL は HEAD を送らず、GET でリダイレクトをたどった応答をそのまま要約する', async () => {
+		const { host, requests } = await recordingServer((req, res) => {
+			if (req.url === '/') {
+				res.writeHead(302, { location: '/page', 'content-length': 0 }).end();
+			} else if (req.url === '/page') {
+				sendWithLength(res, PAGE);
+			} else {
+				res.writeHead(404, { 'content-length': 0 }).end();
+			}
+		});
+
+		const summary = await summarize(`${host}/`, { allowedPrivateNetworks });
+
+		expect(summary.title).toBe('page');
+		expect(summary.url).toBe(`${host}/page`);
+		expect(requests).toEqual(['GET /', 'GET /page']);
+	});
+
+	test('GET のリダイレクト先がプロバイダに当たれば、本文を読まずに最終 URL でプロバイダに渡す', async () => {
+		const { plugin, urls } = pathPlugin('/target');
+		const { host, requests, connections } = await recordingServer((req, res) => {
+			if (req.url?.startsWith('/short')) {
+				res.writeHead(302, { location: `/target${req.url.slice('/short'.length)}`, 'content-length': 0 }).end();
+			} else {
+				sendWithLength(res, PAGE);
+			}
+		});
+
+		const summary = await summarize(`${host}/short-1`, { plugins: [plugin], allowedPrivateNetworks });
+
+		expect(summary).toEqual({ ...pluginResult, url: `${host}/target-1` });
+		expect(urls).toEqual([`${host}/target-1`]);
+		expect(requests).toEqual(['GET /short-1', 'GET /target-1']);
+		// The short body of the handed-off response was read to its end, so its connection serves the next summary.
+		await summarize(`${host}/short-2`, { plugins: [plugin], allowedPrivateNetworks });
+		expect(connections()).toBe(1);
+	});
+
+	test('プロバイダに渡す応答の本文が大きいときは、読まずに接続を切る', async () => {
+		const { plugin, urls } = pathPlugin('/target');
+		const big = Buffer.alloc(1024 * 1024, 'x');
+		const { host, connections } = await recordingServer((req, res) => {
+			if (req.url?.startsWith('/short')) {
+				res.writeHead(302, { location: `/target${req.url.slice('/short'.length)}`, 'content-length': 0 }).end();
+			} else {
+				res.writeHead(200, { 'content-type': 'text/html', 'content-length': big.byteLength }).end(big);
+			}
+		});
+
+		await summarize(`${host}/short-1`, { plugins: [plugin], allowedPrivateNetworks });
+		await summarize(`${host}/short-2`, { plugins: [plugin], allowedPrivateNetworks });
+
+		expect(urls).toEqual([`${host}/target-1`, `${host}/target-2`]);
+		expect(connections()).toBe(2);
+	});
+
+	// As with the HEAD upstream sends: the provider fetches what it needs itself, under its own checks.
+	test('プロバイダに渡す応答は、ページの型と大きさを確かめない', async () => {
+		const { plugin, urls } = pathPlugin('/target');
+		const { host } = await recordingServer((req, res) => {
+			if (req.url === '/short') {
+				res.writeHead(302, { location: '/target', 'content-length': 0 }).end();
+			} else {
+				res.writeHead(200, { 'content-type': 'application/pdf', 'content-length': 100 }).end(Buffer.alloc(100));
+			}
+		});
+
+		const summary = await summarize(`${host}/short`, { plugins: [plugin], allowedPrivateNetworks, contentLengthLimit: 10, contentLengthRequired: true });
+
+		expect(summary.title).toBe('from plugin');
+		expect(urls).toEqual([`${host}/target`]);
+	});
+
+	test('リダイレクト先がページを読むプロバイダ（Amazon）なら、GET した本文をそのまま渡し、ページを取り直さない', async () => {
+		const page = fixture('amazon.html');
+		const requests: string[] = [];
+		const server = await serve((req, res) => {
+			requests.push(`${req.method} ${req.headers.host}${req.url}`);
+			if (req.headers.host === 'amzn.test') {
+				res.writeHead(302, { location: 'https://www.amazon.co.jp/dp/B000000000', 'content-length': 0 }).end();
+			} else if (req.url === '/dp/B000000000') {
+				// No content-length: Amazon's own fetch does not require it, whatever contentLengthRequired says.
+				sendStream(res, [page]);
+			} else {
+				res.writeHead(404).end();
+			}
+		});
+		const agents = loopbackAgents(Number(new URL(server).port));
+
+		cleanups.push(() => agents.destroy());
+
+		const summary = await summarize('https://amzn.test/x', { contentLengthRequired: true, agent: { http: agents.http, https: agents.https } });
+
+		expect(summary).toMatchObject({ title: 'KISS 原則の本', sitename: 'Amazon', url: 'https://www.amazon.co.jp/dp/B000000000' });
+		expect(requests).toEqual(['GET amzn.test/x', 'GET www.amazon.co.jp/dp/B000000000']);
+	});
+
+	// Before, the HEAD got the 403 too, the summary fell back to the short URL (no provider) and its page GET failed.
+	test('リダイレクト先のプロバイダの URL が 2xx 以外を返しても、プロバイダに渡す', async () => {
+		const body = Buffer.from(JSON.stringify({ name: 'misskey-js', description: 'Misskey SDK for JavaScript' }));
+		const requests: string[] = [];
+		const server = await serve((req, res) => {
+			requests.push(`${req.method} ${req.headers.host}${req.url}`);
+			if (req.headers.host === 'npm.test') {
+				res.writeHead(302, { location: `https://www.npmjs.com/package${req.url}`, 'content-length': 0 }).end();
+			} else if (req.headers.host === 'www.npmjs.com') {
+				res.writeHead(403, { 'content-type': 'text/html', 'content-length': 0 }).end();
+			} else if (req.url === '/misskey-js/latest') {
+				res.writeHead(200, { 'content-type': 'application/json', 'content-length': body.byteLength }).end(body);
+			} else {
+				res.writeHead(404).end();
+			}
+		});
+		const agents = loopbackAgents(Number(new URL(server).port));
+
+		cleanups.push(() => agents.destroy());
+
+		const summary = await summarize('https://npm.test/misskey-js', { agent: { http: agents.http, https: agents.https } });
+
+		expect(summary).toMatchObject({ title: 'misskey-js', sitename: 'npm', url: 'https://www.npmjs.com/package/misskey-js' });
+		expect(requests).toEqual([
+			'GET npm.test/misskey-js',
+			'GET www.npmjs.com/package/misskey-js',
+			'GET registry.npmjs.org/misskey-js/latest',
+		]);
+	});
+
+	test('最終 URL でプロバイダを選ぶときにプラグインの test() が例外を投げたら、その例外で失敗する', async () => {
+		const { host } = await recordingServer((req, res) => {
+			if (req.url === '/short') {
+				res.writeHead(302, { location: '/target', 'content-length': 0 }).end();
+			} else {
+				sendWithLength(res, PAGE);
+			}
+		});
+		const plugin: SummaryPlugin = {
+			test: url => {
+				if (url.pathname === '/target') {
+					throw new Error('test threw');
+				}
+
+				return false;
+			},
+			summarize: async () => ({ ...pluginResult }),
+		};
+
+		await expect(summarize(`${host}/short`, { plugins: [plugin], allowedPrivateNetworks })).rejects.toThrow('test threw');
+	});
+
+	// The body is dropped anyway; reading it is only so the connection can be reused, so running out of time there is no failure.
+	test('プロバイダに渡す応答の本文を読み切る前に operationTimeout が来ても、プロバイダには渡す', async () => {
+		const { plugin, urls } = pathPlugin('/target');
+		const { host } = await recordingServer((req, res) => {
+			if (req.url === '/short') {
+				res.writeHead(302, { location: '/target', 'content-length': 0 }).end();
+			} else {
+				res.writeHead(200, { 'content-type': 'text/html' });
+				res.write('<html>');
+				// The rest never comes.
+			}
+		});
+		const started = performance.now();
+		const summary = await summarize(`${host}/short`, { plugins: [plugin], allowedPrivateNetworks, operationTimeout: 200 });
+
+		expect(summary.title).toBe('from plugin');
+		expect(urls).toEqual([`${host}/target`]);
+		expect(performance.now() - started).toBeLessThan(2000);
+	});
+
+	test('元の URL がプロバイダに当たるときは、これまでどおり HEAD で最終 URL を求めてから渡す', async () => {
+		const { plugin, urls } = pathPlugin('/p');
+		const { host, requests } = await recordingServer((req, res) => {
+			if (req.url === '/p') {
+				res.writeHead(301, { location: '/p/moved', 'content-length': 0 }).end();
+			} else {
+				sendWithLength(res, PAGE);
+			}
+		});
+
+		const summary = await summarize(`${host}/p`, { plugins: [plugin], allowedPrivateNetworks });
+
+		expect(summary.url).toBe(`${host}/p/moved`);
+		expect(urls).toEqual([`${host}/p/moved`]);
+		expect(requests).toEqual(['HEAD /p', 'HEAD /p/moved']);
+	});
+
+	test('プロバイダに当たらない URL の GET が失敗したら、同じ URL を取り直さずにエラーにする', async () => {
+		const { host, requests } = await recordingServer((_req, res) => res.writeHead(404, { 'content-length': 0 }).end());
+
+		const e = await summarize(`${host}/missing`, { allowedPrivateNetworks }).catch((e: unknown) => e);
+
+		expect(e).toBeInstanceOf(StatusError);
+		expect((e as StatusError).statusCode).toBe(404);
+		expect(requests).toEqual(['GET /missing']);
 	});
 });

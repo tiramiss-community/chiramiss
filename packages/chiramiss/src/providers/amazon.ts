@@ -1,6 +1,7 @@
 // Derived from misskey-dev/summaly (MIT)
-import { fetchPage } from '@/extract/general.js';
+import { type Page, fetchPage } from '@/extract/general.js';
 import { loadDom } from '@/html/dom.js';
+import type { Summary } from '@/types.js';
 import type { Provider } from './provider.js';
 
 // Empty strings (absent elements, empty attributes) must fall through to the next source, as upstream does.
@@ -33,52 +34,63 @@ export const amazon: Provider = {
 		// Upstream fetched with scpaping()'s defaults, so redirects are always followed and content-length is never required.
 		// The rest of the context (transport, User-Agent, lang, timeouts, size limit) still applies.
 		const page = await fetchPage({ ...ctx, options: { ...ctx.options, followRedirects: true, contentLengthRequired: false } }, url);
-		const $ = loadDom(page.html);
 
-		const title = $('#title').text();
+		return summarizeProduct(page);
+	},
 
-		const description =
-			$('#productDescription').text() ||
-			$('meta[name="description"]').attr('content');
-
-		const thumbnail: string | undefined = $('#landingImage').attr('src');
-
-		const twitterCard =
-			$('meta[name="twitter:card"]').attr('content') ||
-			$('meta[property="twitter:card"]').attr('content');
-
-		const thumbnailStyle =
-			twitterCard === 'summary_large_image' ? 'summary_large_image' :
-			twitterCard === 'summary' ? 'summary' :
-			null;
-
-		const playerUrl =
-			$('meta[property="twitter:player"]').attr('content') ||
-			$('meta[name="twitter:player"]').attr('content');
-
-		const playerWidth =
-			$('meta[property="twitter:player:width"]').attr('content') ||
-			$('meta[name="twitter:player:width"]').attr('content');
-
-		const playerHeight =
-			$('meta[property="twitter:player:height"]').attr('content') ||
-			$('meta[name="twitter:player:height"]').attr('content');
-
-		return {
-			title: title ? title.trim() : null,
-			icon: 'https://www.amazon.com/favicon.ico',
-			description: description ? description.trim() : null,
-			thumbnail: thumbnail ? thumbnail.trim() : null,
-			thumbnailStyle,
-			player: {
-				url: playerUrl || null,
-				width: playerWidth ? parseInt(playerWidth) : null,
-				height: playerHeight ? parseInt(playerHeight) : null,
-				allow: playerUrl ? ['fullscreen', 'encrypted-media'] : [],
-			},
-			sitename: 'Amazon',
-			activityPub: null,
-			fediverseCreator: null,
-		};
+	// The page GET that reached this provider followed redirects; it must not require content-length either.
+	fromPage: {
+		checks: { contentLengthRequired: false },
+		summarize: async (_ctx, _url, page) => summarizeProduct(page),
 	},
 };
+
+function summarizeProduct(page: Page): Summary {
+	const $ = loadDom(page.html);
+
+	const title = $('#title').text();
+
+	const description =
+		$('#productDescription').text() ||
+		$('meta[name="description"]').attr('content');
+
+	const thumbnail: string | undefined = $('#landingImage').attr('src');
+
+	const twitterCard =
+		$('meta[name="twitter:card"]').attr('content') ||
+		$('meta[property="twitter:card"]').attr('content');
+
+	const thumbnailStyle =
+		twitterCard === 'summary_large_image' ? 'summary_large_image' :
+		twitterCard === 'summary' ? 'summary' :
+		null;
+
+	const playerUrl =
+		$('meta[property="twitter:player"]').attr('content') ||
+		$('meta[name="twitter:player"]').attr('content');
+
+	const playerWidth =
+		$('meta[property="twitter:player:width"]').attr('content') ||
+		$('meta[name="twitter:player:width"]').attr('content');
+
+	const playerHeight =
+		$('meta[property="twitter:player:height"]').attr('content') ||
+		$('meta[name="twitter:player:height"]').attr('content');
+
+	return {
+		title: title ? title.trim() : null,
+		icon: 'https://www.amazon.com/favicon.ico',
+		description: description ? description.trim() : null,
+		thumbnail: thumbnail ? thumbnail.trim() : null,
+		thumbnailStyle,
+		player: {
+			url: playerUrl || null,
+			width: playerWidth ? parseInt(playerWidth) : null,
+			height: playerHeight ? parseInt(playerHeight) : null,
+			allow: playerUrl ? ['fullscreen', 'encrypted-media'] : [],
+		},
+		sitename: 'Amazon',
+		activityPub: null,
+		fediverseCreator: null,
+	};
+}

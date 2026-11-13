@@ -21,15 +21,28 @@ export type FetchRequest = {
 	operationTimeout: number;
 	contentLengthLimit: number;
 	contentLengthRequired: boolean;
+	/**
+	 * Called with the final URL (credentials removed) once the headers of the last hop's response arrive, before any
+	 * check of the response. Returning 'drop' drops the body unread and unchecked, whatever the status (see
+	 * discardBody), and the result has `handedOff: true` and an empty body: the caller hands the URL to something that
+	 * fetches what it needs itself. Otherwise the response is checked and read as usual, with the checks returned (if
+	 * any) in place of the request's.
+	 */
+	onFinalUrl?: (url: URL) => 'drop' | Partial<ResponseChecks> | undefined;
 };
+
+/** The checks of a response's headers before its body is read (the status is always checked). */
+export type ResponseChecks = Pick<FetchRequest, 'typeFilter' | 'contentLengthLimit' | 'contentLengthRequired'>;
 
 export type FetchResult = {
 	/** Final URL after redirects */
 	url: string;
 	statusCode: number;
 	headers: http.IncomingHttpHeaders;
-	/** Decompressed body */
+	/** Decompressed body (empty when handed off) */
 	body: Buffer;
+	/** `req.onFinalUrl` dropped the response; the body was not read and the status not checked */
+	handedOff?: boolean;
 };
 
 const MAX_REDIRECTS = 10;
@@ -66,7 +79,7 @@ async function fetchFollowingRedirects(transport: Transport, req: FetchRequest, 
 		const location = res.headers.location;
 
 		if (req.followRedirects && location && REDIRECT_CODES.has(res.statusCode ?? 0)) {
-			await discardRedirect(res, req.method, signal);
+			await discardBody(res, req.method, signal);
 			if (redirects >= MAX_REDIRECTS) {
 				throw new Error(`Redirected ${MAX_REDIRECTS} times. Aborting.`);
 			}
@@ -74,7 +87,7 @@ async function fetchFollowingRedirects(transport: Transport, req: FetchRequest, 
 			continue;
 		}
 		try {
-			return await receiveResponse(req, url, res);
+			return await receiveResponse(req, url, res, signal);
 		} catch (e) {
 			throw timeoutError() ?? e;
 		}
@@ -82,13 +95,13 @@ async function fetchFollowingRedirects(transport: Transport, req: FetchRequest, 
 }
 
 /**
- * Drops a redirect response. When it has no body (HEAD, which is how redirects are usually followed) or a short one
- * (by Content-Length or chunked), the body is read to its end, so the keep-alive connection goes back to the pool and
- * the next hop, usually on the same site, does not open a new connection (and for https, handshake again).
- * Any other body (larger than REDIRECT_BODY_DRAIN_LIMIT, delimited by the connection closing, or not done within
- * REDIRECT_BODY_DRAIN_TIMEOUT) is cut by destroying the response, so the next hop never waits on it.
+ * Drops a response whose body is not used: a redirect, or one handed off (see FetchRequest.handOff). When it has no
+ * body (HEAD) or a short one (by Content-Length or chunked), the body is read to its end, so the keep-alive connection
+ * goes back to the pool and the next request, usually to the same site, does not open a new connection (and for https,
+ * handshake again). Any other body (larger than REDIRECT_BODY_DRAIN_LIMIT, delimited by the connection closing, or not
+ * done within REDIRECT_BODY_DRAIN_TIMEOUT) is cut by destroying the response, so the next request never waits on it.
  */
-function discardRedirect(res: http.IncomingMessage, method: FetchRequest['method'], signal: AbortSignal): Promise<void> {
+function discardBody(res: http.IncomingMessage, method: FetchRequest['method'], signal: AbortSignal): Promise<void> {
 	const contentLength = res.headers['content-length'];
 	const chunked = /\bchunked\b/i.test(res.headers['transfer-encoding'] ?? '');
 	const drainable = method === 'HEAD'
@@ -272,52 +285,72 @@ function isStaleSocketError(err: Error): boolean {
 	return code === 'ECONNRESET' || (code?.startsWith('HPE_') ?? false);
 }
 
-async function receiveResponse(req: FetchRequest, url: URL, res: http.IncomingMessage): Promise<FetchResult> {
+/** The type and size checks a response must pass before its body is read. */
+function checkResponseHeaders(req: ResponseChecks, res: http.IncomingMessage): void {
+	// Check html
+	const contentType = res.headers['content-type'];
+
+	if (req.typeFilter && !contentType?.match(req.typeFilter)) {
+		throw new Error(`Rejected by type filter ${contentType}`);
+	}
+
+	// Size check by the response header
+	const contentLength = res.headers['content-length'];
+
+	if (contentLength) {
+		const maxSize = req.contentLengthLimit;
+		const size = Number(contentLength);
+
+		if (size > maxSize) {
+			throw new Error(`maxSize exceeded (${size} > ${maxSize}) on response`);
+		}
+	} else if (req.contentLengthRequired) {
+		throw new Error('content-length required');
+	}
+}
+
+async function receiveResponse(req: FetchRequest, url: URL, res: http.IncomingMessage, signal: AbortSignal): Promise<FetchResult> {
 	const statusCode = res.statusCode ?? 0;
 	// Like got: fall back to the standard reason phrase when the server sends an empty one.
 	const statusMessage = res.statusMessage !== undefined && res.statusMessage !== ''
 		? res.statusMessage
 		: http.STATUS_CODES[statusCode] ?? '';
+	const finalUrl = new URL(url);
+
+	finalUrl.username = '';
+	finalUrl.password = '';
+	let decision: 'drop' | Partial<ResponseChecks> | undefined;
 
 	try {
-		// Status check (same rule as got: with followRedirects, unfollowed 3xx other than 304 are errors)
-		const okLimit = req.followRedirects ? 299 : 399;
+		decision = req.onFinalUrl?.(new URL(finalUrl));
+		if (decision !== 'drop') {
+			// Status check (same rule as got: with followRedirects, unfollowed 3xx other than 304 are errors)
+			const okLimit = req.followRedirects ? 299 : 399;
 
-		if (!((statusCode >= 200 && statusCode <= okLimit) || statusCode === 304)) {
-			throw new StatusError(`${statusCode} ${statusMessage}`, statusCode, statusMessage);
-		}
-
-		// Check html
-		const contentType = res.headers['content-type'];
-
-		if (req.typeFilter && !contentType?.match(req.typeFilter)) {
-			throw new Error(`Rejected by type filter ${contentType}`);
-		}
-
-		// Size check by the response header
-		const contentLength = res.headers['content-length'];
-
-		if (contentLength) {
-			const maxSize = req.contentLengthLimit;
-			const size = Number(contentLength);
-
-			if (size > maxSize) {
-				throw new Error(`maxSize exceeded (${size} > ${maxSize}) on response`);
+			if (!((statusCode >= 200 && statusCode <= okLimit) || statusCode === 304)) {
+				throw new StatusError(`${statusCode} ${statusMessage}`, statusCode, statusMessage);
 			}
-		} else if (req.contentLengthRequired) {
-			throw new Error('content-length required');
+			checkResponseHeaders({ ...req, ...decision }, res);
 		}
 	} catch (e) {
 		res.destroy();
 		throw e;
 	}
+	if (decision === 'drop') {
+		// Reading the body to its end is only for reusing the connection: it is bounded by REDIRECT_BODY_DRAIN_TIMEOUT
+		// and the operation's signal, and never fails the request.
+		await discardBody(res, req.method, signal);
+
+		return { url: finalUrl.href, statusCode, headers: res.headers, body: Buffer.alloc(0), handedOff: true };
+	}
+	const maxSize = decision?.contentLengthLimit ?? req.contentLengthLimit;
 
 	const hasNoBody = req.method === 'HEAD'
 		|| (statusCode >= 100 && statusCode < 200)
 		|| statusCode === 204 || statusCode === 205 || statusCode === 304;
 	const encoding = hasNoBody ? undefined : res.headers['content-encoding']?.trim().toLowerCase();
 	const decompressor = encoding ? createDecompressor(encoding) : null;
-	const body = await readBody(res, decompressor, req.contentLengthLimit);
+	const body = await readBody(res, decompressor, maxSize);
 
 	let headers = res.headers;
 
@@ -327,11 +360,6 @@ async function receiveResponse(req: FetchRequest, url: URL, res: http.IncomingMe
 		delete headers['content-encoding'];
 		delete headers['content-length'];
 	}
-
-	const finalUrl = new URL(url);
-
-	finalUrl.username = '';
-	finalUrl.password = '';
 
 	return { url: finalUrl.href, statusCode, headers, body };
 }

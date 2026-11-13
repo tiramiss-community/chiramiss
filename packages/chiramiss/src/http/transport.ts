@@ -25,7 +25,8 @@ export type Transport = {
 	/**
 	 * Keep-alive agents built with the guarded lookup of `guard` (see createGuardedAgents), so every guarded connection
 	 * runs the connect-time check and none is shared with agents of another guard setting (no reuse of sockets
-	 * checked under another policy). The requests of one call (HEAD for the final URL, the page, favicon, oEmbed)
+	 * checked under another policy). The requests of one call (the page and its redirects, or the HEAD for the final
+	 * URL and a provider's API, then favicon and oEmbed)
 	 * reuse their sockets.
 	 * - With an agent pool, they come from the pool and are shared with the other calls of the pool's summarizer that
 	 *   have the same guard setting; `close` leaves them (and their idle sockets, closed on their idle timeout) alone.

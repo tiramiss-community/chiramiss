@@ -51,7 +51,8 @@ export type GuardedAgentPoolOptions = GuardedAgentOptions & {
  * (or past Content-Length) in a later segment can have those bytes read as the next response on the reused socket,
  * which may belong to a later summary of the same host and port. Node destroys an idle pooled socket that receives data,
  * and sendRequest sends again when the bytes break the response (HPE_*), but bytes that happen to parse as a body go
- * unnoticed. Not reusing after a HEAD would give up most of the gain (HEAD for the final URL, then the page).
+ * unnoticed. Not reusing after a HEAD would give up much of the gain (the favicon check is a HEAD, and so is the
+ * request for the final URL of a URL a provider takes).
  */
 export function createGuardedAgents(guard: AddressGuard, options: GuardedAgentOptions = {}): GuardedAgents {
 	const lookup = createGuardedLookup(guard);

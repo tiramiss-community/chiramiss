@@ -1,5 +1,7 @@
 // Derived from misskey-dev/summaly (MIT)
 import type { ScrapeContext } from '@/context.js';
+import type { Page } from '@/extract/general.js';
+import type { ResponseChecks } from '@/http/request.js';
 import type { GeneralScrapingOptions, Summary, SummarizeOptions, SummaryPlugin } from '@/types.js';
 
 /** Site-specific summarizer. Gets the per-call context so its requests go through the same transport and settings. */
@@ -7,6 +9,15 @@ export type Provider = {
 	name: string;
 	test(url: URL): boolean;
 	summarize(ctx: ScrapeContext, url: URL): Promise<Summary | null>;
+	/**
+	 * For a provider whose summary is built from the page at `url` as fetchPage gets it. When the redirects of the page
+	 * GET for a URL no provider takes end on this provider, it gets that response instead of fetching the page again.
+	 * `checks` replace the context's checks of that response where the provider's own fetch differs.
+	 */
+	fromPage?: {
+		checks?: Partial<ResponseChecks>;
+		summarize(ctx: ScrapeContext, url: URL, page: Page): Promise<Summary | null>;
+	};
 };
 
 /**

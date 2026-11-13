@@ -13,4 +13,6 @@ export const bluesky: Provider = {
 
 		return await summarizePage(ctx, url, page);
 	},
+
+	fromPage: { summarize: summarizePage },
 };

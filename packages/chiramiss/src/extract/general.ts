@@ -1,8 +1,9 @@
 // Derived from misskey-dev/summaly (MIT)
 import type http from 'node:http';
-import { type ScrapeContext, fetchWithContext } from '@/context.js';
+import { type ContextRequest, type ScrapeContext, fetchWithContext } from '@/context.js';
 import { parseHead } from '@/html/head.js';
 import { decodeHtml } from '@/http/decode.js';
+import type { FetchResult } from '@/http/request.js';
 import type { Summary } from '@/types.js';
 import {
 	pickActivityPub,
@@ -28,23 +29,31 @@ export type Page = {
 	headers: http.IncomingHttpHeaders;
 };
 
-/** GETs an HTML page with the context's settings. Rejects non-HTML responses. */
-export async function fetchPage(ctx: ScrapeContext, url: URL): Promise<Page> {
-	const res = await fetchWithContext(ctx, {
-		url: url.href,
+/** The GET of an HTML page with the context's settings. Rejects non-HTML responses. */
+export function pageRequest(ctx: ScrapeContext, url: string): ContextRequest {
+	return {
+		url,
 		method: 'GET',
 		headers: {
 			'accept': 'text/html,application/xhtml+xml',
 			'accept-language': ctx.options.lang ?? undefined,
 		},
 		typeFilter: /^(text\/html|application\/xhtml\+xml)/,
-	});
+	};
+}
 
+/** The page of a response to pageRequest. */
+export function toPage(res: FetchResult): Page {
 	return {
 		url: new URL(res.url),
 		html: decodeHtml(res.body, res.headers['content-type']),
 		headers: res.headers,
 	};
+}
+
+/** GETs an HTML page with the context's settings. Rejects non-HTML responses. */
+export async function fetchPage(ctx: ScrapeContext, url: URL): Promise<Page> {
+	return toPage(await fetchWithContext(ctx, pageRequest(ctx, url.href)));
 }
 
 /**
