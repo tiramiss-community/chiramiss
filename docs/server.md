@@ -33,9 +33,10 @@ services:
   chiramiss:
     image: ghcr.io/tiramiss-community/chiramiss:latest
     restart: unless-stopped
-    environment:
-      HTTPS_PROXY: "http://proxy.example:3128"
 ```
+
+If your deployment needs an outbound proxy, configure the [proxy environment variables](#environment-variables)
+with your own proxy URL; see the [proxy guide](library.md#proxies) for requirements.
 
 For Kubernetes, use `/healthz` for the probes; the container is stateless and shuts down gracefully on SIGTERM
 (requests in progress are answered first).
